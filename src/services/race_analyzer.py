@@ -107,7 +107,7 @@ class RaceAnalyzer:
                 "Avg Resistance (%)": round(workout.avg_resistance, 1) if workout.avg_resistance else 0,
                 "Avg HR (BPM)": round(workout.avg_heart_rate, 1) if workout.avg_heart_rate else "N/A",
                 "Max HR (BPM)": round(workout.max_heart_rate, 1) if workout.max_heart_rate else "N/A",
-                "Distance": round(workout.distance, 2) if workout.distance else 0,
+                "Distance (mi)": round(workout.distance, 2) if workout.distance else 0,
                 "Calories": round(workout.calories, 0) if workout.calories else 0
             })
         

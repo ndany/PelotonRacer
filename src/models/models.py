@@ -185,6 +185,47 @@ class Workout:
     calories: float = 0.0
     performance_metrics: Optional[PerformanceMetrics] = None
     
+    def update_from_performance_data(self, performance_data: Dict) -> None:
+        """
+        Update workout with data from performance_graph API response.
+        This includes both time-series metrics and summary statistics.
+        
+        Args:
+            performance_data: Response from /api/workout/{id}/performance_graph
+        """
+        # Update performance metrics (time series data)
+        self.performance_metrics = PerformanceMetrics.from_api_response(performance_data)
+        
+        # Update summary statistics from performance_graph summaries
+        summaries = performance_data.get("summaries", [])
+        summary_dict = {s.get("slug"): s.get("value", 0) for s in summaries}
+        
+        # Also check average_summaries for avg values
+        avg_summaries = performance_data.get("average_summaries", [])
+        avg_dict = {s.get("slug"): s.get("value", 0) for s in avg_summaries}
+        
+        # Update summary fields if we got data
+        if summary_dict.get("total_output"):
+            self.total_output = summary_dict.get("total_output", 0.0)
+        if summary_dict.get("distance"):
+            self.distance = summary_dict.get("distance", 0.0)
+        if summary_dict.get("total_calories"):
+            self.calories = summary_dict.get("total_calories", 0.0)
+        elif summary_dict.get("calories"):
+            self.calories = summary_dict.get("calories", 0.0)
+        
+        # Update averages from average_summaries
+        if avg_dict.get("avg_output"):
+            self.avg_output = avg_dict.get("avg_output", 0.0)
+        if avg_dict.get("avg_cadence"):
+            self.avg_cadence = avg_dict.get("avg_cadence", 0.0)
+        if avg_dict.get("avg_resistance"):
+            self.avg_resistance = avg_dict.get("avg_resistance", 0.0)
+        if avg_dict.get("avg_heart_rate"):
+            self.avg_heart_rate = avg_dict.get("avg_heart_rate", 0.0)
+        if avg_dict.get("max_heart_rate"):
+            self.max_heart_rate = avg_dict.get("max_heart_rate", 0.0)
+    
     @classmethod
     def from_api_response(cls, workout_data: Dict, performance_data: Optional[Dict] = None) -> 'Workout':
         """Create Workout from Peloton API response"""

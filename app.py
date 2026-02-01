@@ -518,8 +518,8 @@ def main():
                     if not workout.performance_metrics:
                         perf_data = client.get_workout_performance(workout.workout_id)
                         if perf_data:
-                            from src.models.models import PerformanceMetrics
-                            workout.performance_metrics = PerformanceMetrics.from_api_response(perf_data)
+                            # Update workout with both metrics and summaries from performance_graph
+                            workout.update_from_performance_data(perf_data)
     
     # Display comparison
     st.header("🏁 Virtual Race Comparison")
@@ -554,7 +554,8 @@ def main():
     # Time series visualizations
     st.subheader("Performance Over Time")
     
-    metrics = ["output", "cadence", "resistance", "heart_rate", "speed", "distance"]
+    # Note: distance is not available as time-series from Peloton API (only as summary total)
+    metrics = ["output", "cadence", "resistance", "heart_rate", "speed"]
     
     for metric in metrics:
         with st.expander(f"📊 {get_metric_display_name(metric)}", expanded=(metric == "output")):
