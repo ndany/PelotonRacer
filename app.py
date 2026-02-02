@@ -67,8 +67,6 @@ def authenticate_user():
     """Authenticate with Peloton API"""
     bearer_token = os.getenv("PELOTON_BEARER_TOKEN")
     session_id = os.getenv("PELOTON_SESSION_ID")
-    username = os.getenv("PELOTON_USERNAME")
-    password = os.getenv("PELOTON_PASSWORD")
     
     # Try bearer token first (most reliable method)
     if bearer_token and bearer_token.strip():
@@ -92,31 +90,11 @@ def authenticate_user():
                 st.success("✅ Session validated successfully!")
                 return True
             else:
-                st.warning("⚠️ Session ID invalid or expired. Trying username/password...")
+                st.warning("⚠️ Session ID invalid or expired.")
     
-    # Fall back to username/password
-    if not username or not password:
-        st.error("Please set PELOTON_BEARER_TOKEN, PELOTON_SESSION_ID, or (PELOTON_USERNAME and PELOTON_PASSWORD) in your .env file")
-        st.info("""
-        **To get your Bearer Token (recommended):**
-        1. Log into https://members.onepeloton.com in your browser
-        2. Open Developer Tools (F12)
-        3. Go to Network tab, click any request to api.onepeloton.com
-        4. Look in Headers for "Authorization: Bearer eyJ..."
-        5. Copy everything AFTER "Bearer " to your .env file
-        """)
-        return False
-    
-    with st.spinner("Authenticating with Peloton..."):
-        client = PelotonClient(username=username, password=password)
-        if client.authenticate():
-            st.session_state.client = client
-            st.session_state.authenticated = True
-            st.success("✅ Authentication successful!")
-            return True
-        else:
-            st.error("❌ Authentication failed. Try using the Session ID method instead.")
-            return False
+    # No valid credentials found
+    st.error("Please use the Login form in the sidebar or set PELOTON_BEARER_TOKEN in your .env file")
+    return False
 
 
 def load_mock_data():

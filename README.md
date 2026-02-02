@@ -53,25 +53,35 @@ A web application that creates virtual races by comparing your Peloton cycling s
    pip install -r requirements.txt
    ```
 
-4. **Configure Peloton credentials:**
+4. **Configure Peloton credentials (optional):**
    ```bash
    cp .env.example .env
    ```
    
-   Edit `.env` and add your Peloton authentication. The recommended method is using a Bearer Token:
+   You can optionally add a Bearer Token for debugging purposes:
    
    ```env
    PELOTON_BEARER_TOKEN=eyJ...your_token_here
    ```
+   
+   However, the **recommended method** is to use the in-app login form with your Peloton email and password.
 
-### Getting Your Bearer Token (Recommended)
+## Authentication
+
+### Option 1: In-App Login (Recommended)
+
+Simply enter your Peloton username/email and password in the sidebar login form. The app uses Peloton's OAuth flow to authenticate securely - your credentials are sent directly to Peloton's servers only, and is never stored.
+
+### Option 2: Bearer Token (Advanced/Debug)
+
+If you need to use a bearer token, expand "Advanced Login Options" in the sidebar:
 
 1. Log into [members.onepeloton.com](https://members.onepeloton.com) in your browser
 2. Open Developer Tools (F12)
 3. Go to the **Network** tab
 4. Click any request to `api.onepeloton.com`
 5. In the **Headers** section, find `Authorization: Bearer eyJ...`
-6. Copy everything **after** "Bearer " to your `.env` file
+6. Copy everything **after** "Bearer " and paste into the Manual Token Entry field, or save to `.env` as `PELOTON_BEARER_TOKEN`
 
 ## Usage
 
@@ -83,9 +93,9 @@ A web application that creates virtual races by comparing your Peloton cycling s
 2. **Open your browser** to `http://localhost:8501`
 
 3. **Sync your data:**
-   - Toggle off "Use Mock Data" in the sidebar
-   - Click "Authenticate" then "Full Sync"
-   - Wait for all workout data to be fetched
+   - Enter your Peloton email and password in the sidebar
+   - Click "Login" to authenticate
+   - Click "Quick Sync" or "Full Sync" to fetch workout data
 
 4. **Start racing:**
    - Select a competitor from the dropdown
@@ -111,6 +121,8 @@ PelotonRacer/
     ├── config.py                # Centralized configuration
     ├── api/
     │   └── peloton_client.py    # Peloton API wrapper (reusable)
+    ├── auth/
+    │   └── peloton_auth.py      # OAuth PKCE authentication
     ├── models/
     │   └── models.py            # Data models (User, Workout, etc.)
     ├── services/
@@ -118,7 +130,8 @@ PelotonRacer/
     │   └── race_analyzer.py     # Race comparison & analysis logic
     └── utils/
         ├── helpers.py           # Formatting utilities
-        └── mock_data.py         # Test data generator
+        ├── mock_data.py         # Test data generator
+        └── sidebar.py           # Shared sidebar component
 ```
 
 ## Configuration
