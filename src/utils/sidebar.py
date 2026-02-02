@@ -34,6 +34,8 @@ def render_sidebar():
         st.session_state.client = None
     if 'use_mock_data' not in st.session_state:
         st.session_state.use_mock_data = False
+    if 'auth_token' not in st.session_state:
+        st.session_state.auth_token = None
     
     with st.sidebar:
         # 1. Authentication Section (top)
@@ -48,11 +50,13 @@ def render_sidebar():
         else:
             # Real API mode
             if not st.session_state.authenticated:
-                if st.button("🔐 Authenticate", use_container_width=True, key="sidebar_auth"):
-                    if _authenticate_user():
-                        st.rerun()
+                # Show login options
+                _render_login_section()
             else:
                 st.success("✅ Authenticated")
+                if st.button("🚪 Logout", use_container_width=True, key="sidebar_logout"):
+                    _logout()
+                    st.rerun()
         
         st.divider()
         
@@ -107,14 +111,92 @@ def render_sidebar():
             st.rerun()
 
 
+def _render_login_section():
+    """Render the login section with multiple auth options"""
+    from src.auth.peloton_auth import PelotonAuth, PelotonAuthError
+    
+    # Primary login: Email/Password form (always visible)
+    with st.form("login_form", clear_on_submit=False):
+        email = st.text_input("Username/Email", key="login_email", placeholder="your@email.com")
+        password = st.text_input("Password", type="password", key="login_password")
+        
+        submitted = st.form_submit_button("🚀 Login", use_container_width=True)
+        
+        if submitted:
+            if not email or not password:
+                st.error("Please enter both email and password")
+            else:
+                with st.spinner("Authenticating with Peloton..."):
+                    try:
+                        auth = PelotonAuth()
+                        token = auth.login(email, password)
+                        
+                        if _authenticate_with_token(token.access_token):
+                            # Keep token in memory for API calls
+                            st.session_state.auth_token = token
+                            st.success("✅ Login successful!")
+                            st.rerun()
+                        else:
+                            st.error("Token validation failed")
+                    except PelotonAuthError as e:
+                        st.error(f"❌ {str(e)}")
+                    except Exception as e:
+                        st.error(f"❌ Authentication failed: {str(e)}")
+    
+    # Advanced options (discouraged)
+    st.markdown("<small style='color: gray;'>Advanced Login Options - for debug only</small>", unsafe_allow_html=True)
+    
+    with st.expander("🔧 Advanced", expanded=False):
+        # Option 1: Connect with token from env
+        bearer_token = os.getenv("PELOTON_BEARER_TOKEN")
+        if bearer_token and bearer_token.strip():
+            st.caption("Use bearer token from .env file")
+            if st.button("🔐 Connect with Token", use_container_width=True, key="sidebar_auth_token"):
+                if _authenticate_with_token(bearer_token.strip()):
+                    st.rerun()
+        
+        st.divider()
+        
+        # Option 2: Manual token entry
+        st.caption("Manually enter a bearer token from your browser")
+        manual_token = st.text_input("Bearer Token", type="password", key="manual_token", 
+                                     placeholder="eyJ...")
+        if st.button("Validate Token", key="validate_manual_token"):
+            if manual_token:
+                if _authenticate_with_token(manual_token.strip()):
+                    st.rerun()
+
+
+def _authenticate_with_token(bearer_token: str) -> bool:
+    """Authenticate using a bearer token"""
+    from src.api.peloton_client import PelotonClient
+    
+    with st.spinner("Validating token..."):
+        client = PelotonClient(bearer_token=bearer_token)
+        if client.authenticate():
+            st.session_state.client = client
+            st.session_state.authenticated = True
+            st.success("✅ Token validated!")
+            return True
+        else:
+            st.error("❌ Token invalid or expired")
+            return False
+
+
+def _logout():
+    """Log out and clear authentication state"""
+    st.session_state.authenticated = False
+    st.session_state.client = None
+    st.session_state.auth_token = None
+    st.success("Logged out successfully")
+
+
 def _authenticate_user():
-    """Authenticate with Peloton API"""
+    """Authenticate with Peloton API (legacy - kept for backward compatibility)"""
     from src.api.peloton_client import PelotonClient
     
     bearer_token = os.getenv("PELOTON_BEARER_TOKEN")
     session_id = os.getenv("PELOTON_SESSION_ID")
-    username = os.getenv("PELOTON_USERNAME")
-    password = os.getenv("PELOTON_PASSWORD")
     
     # Try bearer token first (most reliable method)
     if bearer_token and bearer_token.strip():
@@ -138,31 +220,11 @@ def _authenticate_user():
                 st.success("✅ Session validated successfully!")
                 return True
             else:
-                st.warning("⚠️ Session ID invalid or expired. Trying username/password...")
+                st.warning("⚠️ Session ID invalid or expired.")
     
-    # Fall back to username/password
-    if not username or not password:
-        st.error("Please set PELOTON_BEARER_TOKEN, PELOTON_SESSION_ID, or (PELOTON_USERNAME and PELOTON_PASSWORD) in your .env file")
-        st.info("""
-        **To get your Bearer Token (recommended):**
-        1. Log into https://members.onepeloton.com in your browser
-        2. Open Developer Tools (F12)
-        3. Go to Network tab, click any request to api.onepeloton.com
-        4. Look in Headers for "Authorization: Bearer eyJ..."
-        5. Copy everything AFTER "Bearer " to your .env file
-        """)
-        return False
-    
-    with st.spinner("Authenticating with Peloton..."):
-        client = PelotonClient(username=username, password=password)
-        if client.authenticate():
-            st.session_state.client = client
-            st.session_state.authenticated = True
-            st.success("✅ Authentication successful!")
-            return True
-        else:
-            st.error("❌ Authentication failed. Try using the Session ID method instead.")
-            return False
+    # No valid credentials found
+    st.error("Please use the Login form above or set PELOTON_BEARER_TOKEN in your .env file")
+    return False
 
 
 def _load_mock_data():
