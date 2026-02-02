@@ -13,6 +13,50 @@ class RaceAnalyzer:
     """Analyzes and compares workout data for virtual races"""
     
     @staticmethod
+    def find_repeated_rides(user_workouts: List[Workout], user_id: str) -> List[CommonRide]:
+        """
+        Find rides that the user has taken multiple times.
+        
+        Args:
+            user_workouts: List of user's workouts
+            user_id: Current user's ID
+            
+        Returns:
+            List of CommonRide objects for rides taken 2+ times
+        """
+        # Create a map of ride_id to list of workouts
+        ride_map: Dict[str, List[Workout]] = defaultdict(list)
+        
+        # Add user's workouts (only valid rides)
+        for workout in user_workouts:
+            if DataManager.is_valid_ride(workout.ride_info):
+                ride_id = workout.ride_info.ride_id
+                ride_map[ride_id].append(workout)
+        
+        # Create CommonRide objects for rides taken multiple times
+        repeated_rides = []
+        for ride_id, workouts in ride_map.items():
+            if len(workouts) >= 2:  # At least 2 attempts
+                # Get ride info from first workout
+                ride_info = workouts[0].ride_info
+                # Create user_workouts dict with just the current user
+                user_workout_map = {user_id: workouts}
+                common_ride = CommonRide(
+                    ride_info=ride_info,
+                    user_workouts=user_workout_map
+                )
+                repeated_rides.append(common_ride)
+        
+        # Sort by attempt count (descending), then by most recent date
+        def get_latest_date(ride):
+            timestamps = [w.start_time for w in ride.user_workouts.get(user_id, [])]
+            return max(timestamps) if timestamps else 0
+        
+        repeated_rides.sort(key=lambda r: (len(r.user_workouts.get(user_id, [])), get_latest_date(r)), reverse=True)
+        
+        return repeated_rides
+    
+    @staticmethod
     def find_common_rides(user_workouts: List[Workout], 
                          follower_workouts: Dict[str, List[Workout]],
                          user_id: str) -> List[CommonRide]:
