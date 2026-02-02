@@ -298,10 +298,35 @@ def visualize_metric(workouts: List[Workout], metric: str, users: Dict[str, User
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{metric}_{key_suffix}")
 
 
+def build_workout_labels(workouts: List[Workout], username: str, is_you: bool = False) -> List[tuple]:
+    """
+    Build consistent labels for workouts.
+    
+    Args:
+        workouts: List of workouts to label
+        username: Username to display
+        is_you: Whether this is the logged-in user (adds "(You)" suffix)
+        
+    Returns:
+        List of (workout, label) tuples
+    """
+    result = []
+    name_suffix = " (You)" if is_you else ""
+    
+    for i, workout in enumerate(workouts):
+        if len(workouts) > 1:
+            label = f"{username}{name_suffix} - Ride {i+1}"
+        else:
+            label = f"{username}{name_suffix}"
+        result.append((workout, label))
+    
+    return result
+
+
 def main():
     """Main application"""
     st.title("🚴‍♂️ PelotonRacer")
-    st.markdown("Compare your Peloton rides with your followers in virtual races!")
+    st.markdown("Compare your Peloton rides — race against followers or track your own progress!")
     
     # Use shared sidebar
     from src.utils.sidebar import render_sidebar
@@ -332,151 +357,200 @@ def main():
     follower_workouts = dm.load_follower_workouts()
     common_rides = st.session_state.common_rides
     
-    if not followers:
-        st.warning("No followers found. Please sync your data first.")
-        return
+    # Calculate repeated rides for the user
+    repeated_rides = RaceAnalyzer.find_repeated_rides(user_workouts, user_profile.user_id)
     
-    # Build a map of follower_id -> count of common rides with you
-    common_ride_counts = {}
-    for follower in followers:
-        count = 0
+    # Mode selection toggle
+    st.header("🎯 Comparison Mode")
+    mode = st.radio(
+        "What would you like to compare?",
+        options=["competitor", "repeated"],
+        format_func=lambda x: "🏁 Compare Against Competitor" if x == "competitor" else "🔄 Compare My Repeated Workouts",
+        horizontal=True,
+        key="comparison_mode"
+    )
+    
+    # Show appropriate summary based on mode
+    if mode == "repeated":
+        # Repeated workouts mode
+        total_repeated = len(repeated_rides)
+        if total_repeated == 0:
+            st.warning("⚠️ You haven't taken any rides multiple times yet! Complete the same class more than once to track your progress.")
+            return
+        
+        total_attempts = sum(len(r.user_workouts.get(user_profile.user_id, [])) for r in repeated_rides)
+        st.info(f"📊 You have **{total_repeated}** rides taken multiple times (**{total_attempts}** total attempts)")
+        
+        # Show user info (read-only, no selection needed)
+        st.header("1️⃣ Your Profile")
+        your_name = st.session_state.user_map[user_profile.user_id].username
+        st.success(f"🔄 Comparing your own repeated workouts for **{your_name}**")
+        
+        # Ride selection - show only repeated rides
+        st.header("2️⃣ Select a Ride")
+        
+        def get_ride_latest_date(ride):
+            timestamps = [w.start_time for w in ride.user_workouts.get(user_profile.user_id, [])]
+            return max(timestamps) if timestamps else 0
+        
+        # Sort by most recent
+        sorted_repeated = sorted(repeated_rides, key=get_ride_latest_date, reverse=True)
+        
+        ride_options = []
+        for ride in sorted_repeated:
+            ride_info = ride.ride_info
+            latest_date = get_ride_latest_date(ride)
+            from datetime import datetime
+            date_str = datetime.fromtimestamp(latest_date).strftime('%Y-%m-%d') if latest_date else ""
+            attempt_count = len(ride.user_workouts.get(user_profile.user_id, []))
+            instructor = ride_info.instructor_name if ride_info.instructor_name else None
+            if instructor:
+                ride_label = f"{date_str} | {ride_info.title or 'Untitled'} | {instructor} ({format_duration(ride_info.duration)}) [Taken {attempt_count}x]"
+            else:
+                ride_label = f"{date_str} | {ride_info.title or 'Untitled'} ({format_duration(ride_info.duration)}) [Taken {attempt_count}x]"
+            ride_options.append(ride_label)
+        
+        selected_ride_idx = st.selectbox(
+            "Choose a ride to analyze your progress:",
+            range(len(ride_options)),
+            format_func=lambda i: ride_options[i],
+            key="repeated_ride_select"
+        )
+        
+        selected_ride = sorted_repeated[selected_ride_idx]
+        your_workouts = selected_ride.user_workouts[user_profile.user_id]
+        
+        # Show attempt count
+        st.info(f"You took this ride **{len(your_workouts)}** time(s)")
+        
+        # Sort workouts by date (oldest first to show progression)
+        sorted_workouts = sorted(your_workouts, key=lambda w: w.start_time or 0)
+        
+        # Build labels using common helper function
+        labeled_workouts = build_workout_labels(sorted_workouts, your_name, is_you=True)
+        
+        # Create workout list and label map for visualization
+        selected_workouts = [w[0] for w in labeled_workouts]
+        workout_labels = {w[0].workout_id: w[1] for w in labeled_workouts}
+        
+    else:
+        # Competitor mode (existing behavior)
+        if not followers:
+            st.warning("No followers found. Please sync your data first.")
+            return
+        
+        # Build a map of follower_id -> count of common rides with you
+        common_ride_counts = {}
+        for follower in followers:
+            count = 0
+            for ride in common_rides:
+                if user_profile.user_id in ride.user_workouts and follower.user_id in ride.user_workouts:
+                    count += 1
+            common_ride_counts[follower.user_id] = count
+        
+        # Sort followers alphabetically by username (case-insensitive)
+        sorted_followers = sorted(followers, key=lambda f: f.username.lower() if f.username else "")
+        
+        # Show summary
+        total_common = len(common_rides)
+        followers_with_common = sum(1 for c in common_ride_counts.values() if c > 0)
+        st.info(f"📊 You have **{total_common}** total common rides with **{followers_with_common}** of your **{len(followers)}** followers")
+        
+        # First: Select Competitor (single selection) - show ALL followers
+        st.header("1️⃣ Select a Competitor")
+        
+        # Build user labels with common ride count
+        def get_follower_label(follower_id):
+            follower = st.session_state.user_map.get(follower_id)
+            username = follower.username if follower else follower_id
+            count = common_ride_counts.get(follower_id, 0)
+            if count > 0:
+                return f"{username} ({count} common rides)"
+            else:
+                return f"{username} (no common rides)"
+        
+        user_labels = {f.user_id: get_follower_label(f.user_id) for f in sorted_followers}
+        user_labels[user_profile.user_id] = f"{st.session_state.user_map[user_profile.user_id].username} (You)"
+        
+        # Single competitor selection - show ALL followers
+        selected_competitor = st.selectbox(
+            "Choose a follower to race against:",
+            [f.user_id for f in sorted_followers],
+            format_func=lambda uid: user_labels[uid],
+            key="competitor_select"
+        )
+        
+        # Check if there are common rides with this competitor
+        competitor_common_count = common_ride_counts.get(selected_competitor, 0)
+        competitor_name = st.session_state.user_map.get(selected_competitor).username if st.session_state.user_map.get(selected_competitor) else selected_competitor
+        
+        if competitor_common_count == 0:
+            st.warning(f"⚠️ You and **{competitor_name}** haven't taken any of the same classes yet!")
+            st.info("Try selecting a different competitor, or take some classes together!")
+            return
+        
+        st.success(f"🏁 Racing: **{st.session_state.user_map[user_profile.user_id].username}** vs **{competitor_name}** — **{competitor_common_count}** common rides!")
+        
+        # Filter rides to only those where BOTH you and the competitor participated
+        filtered_rides = []
         for ride in common_rides:
-            if user_profile.user_id in ride.user_workouts and follower.user_id in ride.user_workouts:
-                count += 1
-        common_ride_counts[follower.user_id] = count
-    
-    # Sort followers alphabetically by username (case-insensitive)
-    sorted_followers = sorted(followers, key=lambda f: f.username.lower() if f.username else "")
-    
-    # Show summary
-    total_common = len(common_rides)
-    followers_with_common = sum(1 for c in common_ride_counts.values() if c > 0)
-    st.info(f"📊 You have **{total_common}** total common rides with **{followers_with_common}** of your **{len(followers)}** followers")
-    
-    # First: Select Competitor (single selection) - show ALL followers
-    st.header("1️⃣ Select a Competitor")
-    
-    # Build user labels with common ride count
-    def get_follower_label(follower_id):
-        follower = st.session_state.user_map.get(follower_id)
-        username = follower.username if follower else follower_id
-        count = common_ride_counts.get(follower_id, 0)
-        if count > 0:
-            return f"{username} ({count} common rides)"
-        else:
-            return f"{username} (no common rides)"
-    
-    user_labels = {f.user_id: get_follower_label(f.user_id) for f in sorted_followers}
-    user_labels[user_profile.user_id] = f"{st.session_state.user_map[user_profile.user_id].username} (You)"
-    
-    # Single competitor selection - show ALL followers
-    selected_competitor = st.selectbox(
-        "Choose a follower to race against:",
-        [f.user_id for f in sorted_followers],
-        format_func=lambda uid: user_labels[uid],
-        key="competitor_select"
-    )
-    
-    # Check if there are common rides with this competitor
-    competitor_common_count = common_ride_counts.get(selected_competitor, 0)
-    competitor_name = st.session_state.user_map.get(selected_competitor).username if st.session_state.user_map.get(selected_competitor) else selected_competitor
-    
-    if competitor_common_count == 0:
-        st.warning(f"⚠️ You and **{competitor_name}** haven't taken any of the same classes yet!")
-        st.info("Try selecting a different competitor, or take some classes together!")
-        return
-    
-    st.success(f"🏁 Racing: **{st.session_state.user_map[user_profile.user_id].username}** vs **{competitor_name}** — **{competitor_common_count}** common rides!")
-    
-    # Filter rides to only those where BOTH you and the competitor participated
-    filtered_rides = []
-    for ride in common_rides:
-        ride_participants = set(ride.user_workouts.keys())
-        if user_profile.user_id in ride_participants and selected_competitor in ride_participants:
-            filtered_rides.append(ride)
-    
-    # Sort rides by workout date (most recent first)
-    # Use the most recent workout timestamp from either user for each ride
-    def get_ride_latest_date(ride):
-        timestamps = []
-        for workouts in ride.user_workouts.values():
-            for w in workouts:
-                timestamps.append(w.start_time)
-        return max(timestamps) if timestamps else 0
-    
-    filtered_rides = sorted(filtered_rides, key=get_ride_latest_date, reverse=True)
-    
-    # Second: Ride selection (filtered by selected competitor)
-    st.header("2️⃣ Select a Ride")
-    
-    ride_options = []
-    for ride in filtered_rides:
-        ride_info = ride.ride_info
-        # Get the most recent workout date for display
-        latest_date = get_ride_latest_date(ride)
-        from datetime import datetime
-        date_str = datetime.fromtimestamp(latest_date).strftime('%Y-%m-%d') if latest_date else ""
-        # Count attempts for each user
-        your_attempts = len(ride.user_workouts.get(user_profile.user_id, []))
-        their_attempts = len(ride.user_workouts.get(selected_competitor, []))
-        instructor = ride_info.instructor_name if ride_info.instructor_name else None
-        if instructor:
-            ride_label = f"{date_str} | {ride_info.title or 'Untitled'} | {instructor} ({format_duration(ride_info.duration)}) [You: {your_attempts}x, Them: {their_attempts}x]"
-        else:
-            ride_label = f"{date_str} | {ride_info.title or 'Untitled'} ({format_duration(ride_info.duration)}) [You: {your_attempts}x, Them: {their_attempts}x]"
-        ride_options.append(ride_label)
-    
-    # Use selected_competitor in the key to force refresh when competitor changes
-    selected_ride_idx = st.selectbox(
-        "Choose a ride to analyze:",
-        range(len(ride_options)),
-        format_func=lambda i: ride_options[i],
-        key=f"ride_select_{selected_competitor}"
-    )
-    
-    selected_ride = filtered_rides[selected_ride_idx]
-    
-    # Get all workouts for each user for this ride
-    your_workouts = selected_ride.user_workouts[user_profile.user_id]
-    competitor_workouts = selected_ride.user_workouts[selected_competitor]
-    
-    # Get simple usernames for labels
-    your_name = st.session_state.user_map[user_profile.user_id].username
-    their_name = st.session_state.user_map.get(selected_competitor).username if st.session_state.user_map.get(selected_competitor) else selected_competitor
-    
-    # Show attempt counts
-    st.info(f"You took this ride **{len(your_workouts)}** time(s), **{their_name}** took it **{len(competitor_workouts)}** time(s)")
-    
-    # Build list of all workout combinations with labels
-    # Use row number (#) that matches the summary table
-    all_workouts_with_labels = []
-    row_num = 1
-    
-    # Add your workouts
-    for i, workout in enumerate(your_workouts):
-        from datetime import datetime
-        date_str = datetime.fromtimestamp(workout.start_time).strftime('%Y-%m-%d') if workout.start_time else ""
-        if len(your_workouts) > 1:
-            label = f"{your_name} (You) - Ride {i+1}"
-        else:
-            label = f"{your_name} (You)"
-        all_workouts_with_labels.append((workout, label, user_profile.user_id))
-        row_num += 1
-    
-    # Add competitor workouts  
-    for i, workout in enumerate(competitor_workouts):
-        from datetime import datetime
-        date_str = datetime.fromtimestamp(workout.start_time).strftime('%Y-%m-%d') if workout.start_time else ""
-        if len(competitor_workouts) > 1:
-            label = f"{their_name} - Ride {i+1}"
-        else:
-            label = f"{their_name}"
-        all_workouts_with_labels.append((workout, label, selected_competitor))
-        row_num += 1
-    
-    # Create workout list and label map for visualization
-    selected_workouts = [w[0] for w in all_workouts_with_labels]
-    workout_labels = {w[0].workout_id: w[1] for w in all_workouts_with_labels}
+            ride_participants = set(ride.user_workouts.keys())
+            if user_profile.user_id in ride_participants and selected_competitor in ride_participants:
+                filtered_rides.append(ride)
+        
+        # Sort rides by workout date (most recent first)
+        def get_ride_latest_date(ride):
+            timestamps = []
+            for workouts in ride.user_workouts.values():
+                for w in workouts:
+                    timestamps.append(w.start_time)
+            return max(timestamps) if timestamps else 0
+        
+        filtered_rides = sorted(filtered_rides, key=get_ride_latest_date, reverse=True)
+        
+        # Second: Ride selection (filtered by selected competitor)
+        st.header("2️⃣ Select a Ride")
+        
+        ride_options = []
+        for ride in filtered_rides:
+            ride_info = ride.ride_info
+            latest_date = get_ride_latest_date(ride)
+            from datetime import datetime
+            date_str = datetime.fromtimestamp(latest_date).strftime('%Y-%m-%d') if latest_date else ""
+            your_attempts = len(ride.user_workouts.get(user_profile.user_id, []))
+            their_attempts = len(ride.user_workouts.get(selected_competitor, []))
+            instructor = ride_info.instructor_name if ride_info.instructor_name else None
+            if instructor:
+                ride_label = f"{date_str} | {ride_info.title or 'Untitled'} | {instructor} ({format_duration(ride_info.duration)}) [You: {your_attempts}x, Them: {their_attempts}x]"
+            else:
+                ride_label = f"{date_str} | {ride_info.title or 'Untitled'} ({format_duration(ride_info.duration)}) [You: {your_attempts}x, Them: {their_attempts}x]"
+            ride_options.append(ride_label)
+        
+        selected_ride_idx = st.selectbox(
+            "Choose a ride to analyze:",
+            range(len(ride_options)),
+            format_func=lambda i: ride_options[i],
+            key=f"ride_select_{selected_competitor}"
+        )
+        
+        selected_ride = filtered_rides[selected_ride_idx]
+        your_workouts = selected_ride.user_workouts[user_profile.user_id]
+        competitor_workouts = selected_ride.user_workouts[selected_competitor]
+        
+        your_name = st.session_state.user_map[user_profile.user_id].username
+        their_name = st.session_state.user_map.get(selected_competitor).username if st.session_state.user_map.get(selected_competitor) else selected_competitor
+        
+        st.info(f"You took this ride **{len(your_workouts)}** time(s), **{their_name}** took it **{len(competitor_workouts)}** time(s)")
+        
+        # Build labels using common helper function
+        your_labeled = build_workout_labels(your_workouts, your_name, is_you=True)
+        their_labeled = build_workout_labels(competitor_workouts, their_name, is_you=False)
+        
+        # Combine all workouts
+        all_labeled = your_labeled + their_labeled
+        
+        selected_workouts = [w[0] for w in all_labeled]
+        workout_labels = {w[0].workout_id: w[1] for w in all_labeled}
     
     # Fetch detailed performance data if needed (only for real API mode)
     if not st.session_state.use_mock_data:
