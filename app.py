@@ -34,6 +34,15 @@ st.set_page_config(
     layout="wide"
 )
 
+# Hide the default Streamlit page navigation in sidebar
+st.markdown("""
+<style>
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Initialize session state
 if 'data_manager' not in st.session_state:
     st.session_state.data_manager = DataManager()
@@ -51,7 +60,7 @@ if 'user_map' not in st.session_state:
     st.session_state.user_map = {}
 
 if 'use_mock_data' not in st.session_state:
-    st.session_state.use_mock_data = True  # Default to mock data
+    st.session_state.use_mock_data = False  # Default to authenticate
 
 
 def authenticate_user():
@@ -294,63 +303,23 @@ def main():
     st.title("🚴‍♂️ PelotonRacer")
     st.markdown("Compare your Peloton rides with your followers in virtual races!")
     
-    # Sidebar
-    with st.sidebar:
-        st.header("Settings")
-        
-        # Data source toggle
-        st.subheader("Data Source")
-        use_mock = st.toggle("Use Mock Data", value=st.session_state.use_mock_data)
-        if use_mock != st.session_state.use_mock_data:
-            st.session_state.use_mock_data = use_mock
-            st.rerun()
-        
-        st.divider()
-        
-        if st.session_state.use_mock_data:
-            # Mock data mode
-            if st.button("🎲 Load Mock Data", use_container_width=True):
-                load_mock_data()
-                st.rerun()
-        else:
-            # Real API mode
-            if not st.session_state.authenticated:
-                if st.button("🔐 Authenticate", use_container_width=True):
-                    authenticate_user()
-            else:
-                st.success("✅ Authenticated")
-                
-                # Show last sync time
-                last_sync = st.session_state.data_manager.get_last_sync_time()
-                if last_sync > 0:
-                    from datetime import datetime
-                    last_sync_str = datetime.fromtimestamp(last_sync).strftime('%Y-%m-%d %H:%M')
-                    st.caption(f"Last sync: {last_sync_str}")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("🔄 Quick Sync", use_container_width=True, help="Incremental sync - only new data"):
-                        sync_data(full_sync=False)
-                with col2:
-                    if st.button("📥 Full Sync", use_container_width=True, help="Full sync - all historical data"):
-                        sync_data(full_sync=True)
-        
-        st.divider()
-        
-        if st.button("🗑️ Clear All Data", use_container_width=True):
-            st.session_state.data_manager.clear_all_data()
-            st.session_state.common_rides = []
-            st.success("Data cleared!")
-            st.rerun()
+    # Use shared sidebar
+    from src.utils.sidebar import render_sidebar
+    render_sidebar()
     
-    # Main content
+    # Main content - require authentication before showing any data
     dm = st.session_state.data_manager
+    
+    # Check authentication first
+    if not st.session_state.authenticated and not st.session_state.use_mock_data:
+        st.info("👈 Please authenticate in the sidebar to get started!")
+        return
     
     if not dm.has_data():
         if st.session_state.use_mock_data:
             st.info("👈 Click 'Load Mock Data' in the sidebar to get started with sample data!")
         else:
-            st.info("👈 Please authenticate and sync your data to get started!")
+            st.info("👈 Please sync your data to get started!")
         return
     
     # Load data
