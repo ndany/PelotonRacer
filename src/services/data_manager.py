@@ -118,11 +118,10 @@ class DataManager:
             workouts: List of workouts to save
             merge: If True, merge with existing workouts (deduped by workout_id)
         """
-        # Filter out invalid rides (no instructor, invalid IDs, etc.)
-        workouts = [w for w in workouts if self.is_valid_ride(w.ride_info)]
+        # Save all workouts (filtering happens at load time)
         
         if merge:
-            existing = self.load_workouts()
+            existing = self.load_workouts(fitness_discipline=None, valid_only=False)
             existing_ids = {w.workout_id for w in existing}
             # Add only new workouts
             new_workouts = [w for w in workouts if w.workout_id not in existing_ids]
@@ -132,11 +131,12 @@ class DataManager:
         with open(self.workouts_file, 'w') as f:
             json.dump(workouts_data, f, indent=2)
     
-    def load_workouts(self, fitness_discipline: str = "cycling") -> List[Workout]:
+    def load_workouts(self, fitness_discipline: str = "cycling", valid_only: bool = True) -> List[Workout]:
         """Load user workouts from JSON
         
         Args:
-            fitness_discipline: Filter by workout type (default: 'cycling')
+            fitness_discipline: Filter by workout type (default: 'cycling'), None for all
+            valid_only: If True, exclude invalid rides (no instructor, etc.)
         """
         if not self.workouts_file.exists():
             return []
@@ -148,6 +148,9 @@ class DataManager:
                 # Filter by fitness discipline
                 if fitness_discipline:
                     workouts = [w for w in workouts if w.ride_info.ride_type == fitness_discipline]
+                # Filter out invalid rides if requested
+                if valid_only:
+                    workouts = [w for w in workouts if self.is_valid_ride(w.ride_info)]
                 return workouts
         except Exception as e:
             print(f"Error loading workouts: {e}")
@@ -180,14 +183,10 @@ class DataManager:
             workouts_by_user: Dictionary mapping user_id to list of workouts
             merge: If True, merge with existing workouts (deduped by workout_id)
         """
-        # Filter out invalid rides from each user's list
-        workouts_by_user = {
-            user_id: [w for w in workouts if self.is_valid_ride(w.ride_info)]
-            for user_id, workouts in workouts_by_user.items()
-        }
+        # Save all workouts (filtering happens at load time)
         
         if merge:
-            existing = self.load_follower_workouts()
+            existing = self.load_follower_workouts(fitness_discipline=None, valid_only=False)
             for user_id, workouts in workouts_by_user.items():
                 existing_workouts = existing.get(user_id, [])
                 existing_ids = {w.workout_id for w in existing_workouts}
@@ -202,11 +201,12 @@ class DataManager:
         with open(self.follower_workouts_file, 'w') as f:
             json.dump(data, f, indent=2)
     
-    def load_follower_workouts(self, fitness_discipline: str = "cycling") -> Dict[str, List[Workout]]:
+    def load_follower_workouts(self, fitness_discipline: str = "cycling", valid_only: bool = True) -> Dict[str, List[Workout]]:
         """Load follower workouts from JSON
         
         Args:
-            fitness_discipline: Filter by workout type (default: 'cycling')
+            fitness_discipline: Filter by workout type (default: 'cycling'), None for all
+            valid_only: If True, exclude invalid rides (no instructor, etc.)
         """
         if not self.follower_workouts_file.exists():
             return {}
@@ -220,6 +220,9 @@ class DataManager:
                     # Filter by fitness discipline
                     if fitness_discipline:
                         workout_objs = [w for w in workout_objs if w.ride_info.ride_type == fitness_discipline]
+                    # Filter out invalid rides if requested
+                    if valid_only:
+                        workout_objs = [w for w in workout_objs if self.is_valid_ride(w.ride_info)]
                     if workout_objs:  # Only include users with matching workouts
                         result[user_id] = workout_objs
                 return result
