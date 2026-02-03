@@ -4,27 +4,14 @@ Virtual race comparison for Peloton rides
 """
 
 import streamlit as st
-import os
-from dotenv import load_dotenv
 import pandas as pd
 import plotly.graph_objects as go
 from typing import List, Dict
 
-from src.api.peloton_client import PelotonClient
-from src.models.models import User, Workout, CommonRide
+from src.models.models import User, Workout
 from src.services.data_manager import DataManager
 from src.services.race_analyzer import RaceAnalyzer
 from src.utils.helpers import format_duration, format_iso_date, get_metric_display_name
-from src.config import (
-    MAX_USER_WORKOUTS_FULL,
-    MAX_USER_WORKOUTS_INCREMENTAL,
-    MAX_FOLLOWER_WORKOUTS_FULL,
-    MAX_FOLLOWER_WORKOUTS_INCREMENTAL,
-    PARALLEL_WORKERS
-)
-
-# Load environment variables
-load_dotenv()
 
 # Page config
 st.set_page_config(
@@ -60,142 +47,6 @@ if 'user_map' not in st.session_state:
 
 if 'use_mock_data' not in st.session_state:
     st.session_state.use_mock_data = False  # Default to authenticate
-
-
-def authenticate_user():
-    """Authenticate with Peloton API"""
-    bearer_token = os.getenv("PELOTON_BEARER_TOKEN")
-    session_id = os.getenv("PELOTON_SESSION_ID")
-    
-    # Try bearer token first (most reliable method)
-    if bearer_token and bearer_token.strip():
-        with st.spinner("Validating bearer token..."):
-            client = PelotonClient(bearer_token=bearer_token.strip())
-            if client.authenticate():
-                st.session_state.client = client
-                st.session_state.authenticated = True
-                st.success("✅ Bearer token validated successfully!")
-                return True
-            else:
-                st.warning("⚠️ Bearer token invalid or expired. Trying session ID...")
-    
-    # Try session ID next (browser cookie method)
-    if session_id and session_id.strip():
-        with st.spinner("Validating session ID..."):
-            client = PelotonClient(session_id=session_id.strip())
-            if client.authenticate():
-                st.session_state.client = client
-                st.session_state.authenticated = True
-                st.success("✅ Session validated successfully!")
-                return True
-            else:
-                st.warning("⚠️ Session ID invalid or expired.")
-    
-    # No valid credentials found
-    st.error("Please use the Login form in the sidebar or set PELOTON_BEARER_TOKEN in your .env file")
-    return False
-
-
-def sync_data(full_sync: bool = False):
-    """Sync data from Peloton API
-    
-    Args:
-        full_sync: If True, fetch all data. If False, only fetch new data since last sync.
-    """
-    import time
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    
-    client = st.session_state.client
-    dm = st.session_state.data_manager
-    
-    last_sync_time = dm.get_last_sync_time() if not full_sync else 0
-    sync_start_time = int(time.time())
-    
-    # Get user profile
-    with st.spinner("Fetching user profile..."):
-        profile_data = client.get_user_profile()
-        if profile_data:
-            user = User.from_api_response(profile_data)
-            dm.save_user_profile(user)
-            st.success(f"✅ Profile loaded: {user.username}")
-    
-    # Get user workouts (incremental)
-    with st.spinner("Fetching your workouts..."):
-        if last_sync_time > 0:
-            st.info(f"🔄 Incremental sync: fetching workouts since last sync...")
-            # For incremental, just get recent workouts
-            workouts_data = client.get_all_workouts(max_workouts=MAX_USER_WORKOUTS_INCREMENTAL)
-        else:
-            st.info("📥 Full sync: fetching all workouts...")
-            workouts_data = client.get_all_workouts(max_workouts=MAX_USER_WORKOUTS_FULL)
-        
-        workouts = [Workout.from_api_response(w) for w in workouts_data]
-        dm.save_workouts(workouts, merge=(last_sync_time > 0))
-        st.success(f"✅ Processed {len(workouts)} workouts")
-    
-    # Get followers
-    with st.spinner("Fetching followers..."):
-        followers_data = client.get_followers()
-        followers = [User.from_api_response(f) for f in followers_data]
-        dm.save_followers(followers)
-        st.success(f"✅ Found {len(followers)} followers")
-    
-    # Get follower workouts in parallel
-    st.info(f"🚀 Fetching follower workouts in parallel ({PARALLEL_WORKERS} concurrent requests)...")
-    
-    # Determine max workouts per follower based on sync type
-    max_workouts_per_follower = MAX_FOLLOWER_WORKOUTS_INCREMENTAL if last_sync_time > 0 else MAX_FOLLOWER_WORKOUTS_FULL
-    
-    # Function to fetch workouts for a single follower
-    def fetch_follower_workouts(follower):
-        try:
-            workouts_data = client.get_all_user_workouts(
-                follower.user_id, 
-                max_workouts=max_workouts_per_follower
-            )
-            workouts = [Workout.from_api_response(w) for w in workouts_data]
-            return follower.user_id, follower.username, workouts, None
-        except Exception as e:
-            return follower.user_id, follower.username, [], str(e)
-    
-    # Fetch in parallel with progress tracking
-    follower_workouts = {}
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    completed = 0
-    
-    # Use ThreadPoolExecutor for parallel API calls
-    with ThreadPoolExecutor(max_workers=PARALLEL_WORKERS) as executor:
-        # Submit all tasks
-        future_to_follower = {
-            executor.submit(fetch_follower_workouts, f): f 
-            for f in followers
-        }
-        
-        # Process completed tasks as they finish
-        for future in as_completed(future_to_follower):
-            user_id, username, workouts, error = future.result()
-            completed += 1
-            
-            if error:
-                status_text.warning(f"⚠️ Error fetching {username}: {error}")
-            else:
-                follower_workouts[user_id] = workouts
-                status_text.text(f"✅ {username}: {len(workouts)} workouts ({completed}/{len(followers)})")
-            
-            progress_bar.progress(completed / len(followers))
-    
-    progress_bar.empty()
-    status_text.empty()
-    
-    # Save follower workouts (merge if incremental)
-    dm.save_follower_workouts(follower_workouts, merge=(last_sync_time > 0))
-    
-    # Save sync metadata
-    dm.save_sync_metadata(sync_start_time, user.user_id if profile_data else None)
-    
-    total_follower_workouts = sum(len(w) for w in follower_workouts.values())
-    st.success(f"✅ All data synced! {total_follower_workouts} follower workouts from {len(followers)} followers")
 
 
 def load_common_rides():
