@@ -77,7 +77,11 @@ def render_sidebar():
                         if _authenticate_with_token(manual_token.strip()):
                             st.rerun()
 
-            # 3b. Sync controls (show last sync, buttons require auth)
+            st.divider()
+
+            # 3b. Data Management
+            st.subheader("📂 Data Management")
+
             last_sync = st.session_state.data_manager.get_last_sync_time()
             if last_sync > 0:
                 last_sync_str = datetime.fromtimestamp(last_sync).strftime('%Y-%m-%d %H:%M')
@@ -105,7 +109,6 @@ def render_sidebar():
                     st.markdown(f"**Followers:** {results['followers']}")
                     st.markdown(f"**Follower Workouts:** {results['follower_workouts']}")
 
-            # 3c. Clear all data
             if st.button("🗑️ Clear All Data", use_container_width=True, key="sidebar_clear_data"):
                 st.session_state.data_manager.clear_all_data()
                 if 'common_rides' in st.session_state:
@@ -113,10 +116,9 @@ def render_sidebar():
                 st.success("Data cleared!")
                 st.rerun()
 
-            # 3d. Export data (ZIP)
             _render_export_button()
 
-            # 3e. Mock data (last section)
+            # 3c. Mock data (last section)
             st.divider()
             st.subheader("🎲 Mock Data")
             use_mock = st.toggle("Use Mock Data", value=st.session_state.use_mock_data, key="sidebar_mock_toggle")
