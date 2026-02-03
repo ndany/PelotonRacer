@@ -42,7 +42,7 @@ def render_sidebar():
         st.header("🔐 Authentication")
 
         if not st.session_state.authenticated:
-            _render_login_section(show_advanced=is_diagnostic_mode())
+            _render_login_section()  # Basic login only
         else:
             st.success("✅ Authenticated")
             if st.button("🚪 Logout", use_container_width=True, key="sidebar_logout"):
@@ -61,35 +61,51 @@ def render_sidebar():
             st.divider()
             st.header("🔧 Developer Tools")
 
-            # 3a. Sync controls (only when authenticated)
-            if st.session_state.authenticated:
-                last_sync = st.session_state.data_manager.get_last_sync_time()
-                if last_sync > 0:
-                    last_sync_str = datetime.fromtimestamp(last_sync).strftime('%Y-%m-%d %H:%M')
-                    st.caption(f"Last sync: {last_sync_str}")
+            # 3a. Advanced Login (inside Developer Tools)
+            with st.expander("🔧 Advanced Login", expanded=False):
+                bearer_token = os.getenv("PELOTON_BEARER_TOKEN")
+                if bearer_token and bearer_token.strip():
+                    st.caption("Use bearer token from .env file")
+                    if st.button("🔐 Connect with Token", use_container_width=True, key="sidebar_auth_token"):
+                        if _authenticate_with_token(bearer_token.strip()):
+                            st.rerun()
+                st.divider()
+                st.caption("Manually enter a bearer token from your browser")
+                manual_token = st.text_input("Bearer Token", type="password", key="manual_token", placeholder="eyJ...")
+                if st.button("Validate Token", key="validate_manual_token"):
+                    if manual_token:
+                        if _authenticate_with_token(manual_token.strip()):
+                            st.rerun()
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("🔄 Quick Sync", use_container_width=True, help="Incremental sync - only new data", key="sidebar_quick_sync"):
-                        _sync_data(full_sync=False)
-                with col2:
-                    if st.button("📥 Full Sync", use_container_width=True, help="Full sync - all historical data", key="sidebar_full_sync"):
-                        _sync_data(full_sync=True)
+            # 3b. Sync controls (show last sync, buttons require auth)
+            last_sync = st.session_state.data_manager.get_last_sync_time()
+            if last_sync > 0:
+                last_sync_str = datetime.fromtimestamp(last_sync).strftime('%Y-%m-%d %H:%M')
+                st.caption(f"Last sync: {last_sync_str}")
 
-                # Show sync details if available
-                if 'last_sync_results' in st.session_state:
-                    results = st.session_state.last_sync_results
-                    sync_time_str = datetime.fromtimestamp(results['timestamp']).strftime('%H:%M:%S')
-                    with st.expander("📋 Last Sync Details", expanded=False):
-                        st.markdown(f"**Type:** {results['sync_type']} Sync")
-                        st.markdown(f"**Time:** {sync_time_str}")
-                        if results['username']:
-                            st.markdown(f"**User:** {results['username']}")
-                        st.markdown(f"**Your Workouts:** {results['user_workouts']}")
-                        st.markdown(f"**Followers:** {results['followers']}")
-                        st.markdown(f"**Follower Workouts:** {results['follower_workouts']}")
+            col1, col2 = st.columns(2)
+            with col1:
+                sync_disabled = not st.session_state.authenticated
+                if st.button("🔄 Quick Sync", use_container_width=True, help="Incremental sync - only new data", key="sidebar_quick_sync", disabled=sync_disabled):
+                    _sync_data(full_sync=False)
+            with col2:
+                if st.button("📥 Full Sync", use_container_width=True, help="Full sync - all historical data", key="sidebar_full_sync", disabled=sync_disabled):
+                    _sync_data(full_sync=True)
 
-            # 3b. Clear all data
+            # Show sync details if available
+            if 'last_sync_results' in st.session_state:
+                results = st.session_state.last_sync_results
+                sync_time_str = datetime.fromtimestamp(results['timestamp']).strftime('%H:%M:%S')
+                with st.expander("📋 Last Sync Details", expanded=False):
+                    st.markdown(f"**Type:** {results['sync_type']} Sync")
+                    st.markdown(f"**Time:** {sync_time_str}")
+                    if results['username']:
+                        st.markdown(f"**User:** {results['username']}")
+                    st.markdown(f"**Your Workouts:** {results['user_workouts']}")
+                    st.markdown(f"**Followers:** {results['followers']}")
+                    st.markdown(f"**Follower Workouts:** {results['follower_workouts']}")
+
+            # 3c. Clear all data
             if st.button("🗑️ Clear All Data", use_container_width=True, key="sidebar_clear_data"):
                 st.session_state.data_manager.clear_all_data()
                 if 'common_rides' in st.session_state:
@@ -97,10 +113,10 @@ def render_sidebar():
                 st.success("Data cleared!")
                 st.rerun()
 
-            # 3c. Export data (ZIP)
+            # 3d. Export data (ZIP)
             _render_export_button()
 
-            # 3d. Mock data (last section)
+            # 3e. Mock data (last section)
             st.divider()
             st.subheader("🎲 Mock Data")
             use_mock = st.toggle("Use Mock Data", value=st.session_state.use_mock_data, key="sidebar_mock_toggle")
@@ -113,11 +129,10 @@ def render_sidebar():
                     st.rerun()
 
 
-def _render_login_section(show_advanced: bool = False):
-    """Render the login section with multiple auth options"""
+def _render_login_section():
+    """Render the basic login section (email/password only)"""
     from src.auth.peloton_auth import PelotonAuth, PelotonAuthError
 
-    # Primary login: Email/Password form (always visible)
     with st.form("login_form", clear_on_submit=False):
         email = st.text_input("Username/Email", key="login_email", placeholder="your@email.com")
         password = st.text_input("Password", type="password", key="login_password")
@@ -134,7 +149,6 @@ def _render_login_section(show_advanced: bool = False):
                         token = auth.login(email, password)
 
                         if _authenticate_with_token(token.access_token):
-                            # Keep token in memory for API calls
                             st.session_state.auth_token = token
                             st.success("✅ Login successful!")
                             st.rerun()
@@ -144,25 +158,6 @@ def _render_login_section(show_advanced: bool = False):
                         st.error(f"❌ {str(e)}")
                     except Exception as e:
                         st.error(f"❌ Authentication failed: {str(e)}")
-
-    # Advanced options only in diagnostic mode
-    if show_advanced:
-        with st.expander("🔧 Advanced Login", expanded=False):
-            bearer_token = os.getenv("PELOTON_BEARER_TOKEN")
-            if bearer_token and bearer_token.strip():
-                st.caption("Use bearer token from .env file")
-                if st.button("🔐 Connect with Token", use_container_width=True, key="sidebar_auth_token"):
-                    if _authenticate_with_token(bearer_token.strip()):
-                        st.rerun()
-
-            st.divider()
-
-            st.caption("Manually enter a bearer token from your browser")
-            manual_token = st.text_input("Bearer Token", type="password", key="manual_token", placeholder="eyJ...")
-            if st.button("Validate Token", key="validate_manual_token"):
-                if manual_token:
-                    if _authenticate_with_token(manual_token.strip()):
-                        st.rerun()
 
 
 def _authenticate_with_token(bearer_token: str) -> bool:
