@@ -1,6 +1,6 @@
 # PelotonRacer 🚴‍♂️
 
-A web application that creates virtual races by comparing your Peloton cycling statistics with your followers who took the same rides.
+A web application that creates virtual races by comparing your Peloton cycling statistics with your followers who took the same rides.  You can also track your own progress by comparing rides you've taken multiple times.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![Streamlit](https://img.shields.io/badge/streamlit-1.29+-red.svg)
@@ -21,7 +21,7 @@ A web application that creates virtual races by comparing your Peloton cycling s
   - Cadence (RPM)
   - Resistance (%)
   - Heart rate (BPM)
-  - Speed & Distance
+  - Speed
 - **📊 Summary Statistics**: Side-by-side comparison table with rankings
 - **🎲 Mock Data Mode**: Test the app without Peloton credentials
 
