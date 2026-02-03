@@ -15,15 +15,14 @@ def render_sidebar():
     """Render the consistent sidebar with navigation and controls for all pages"""
     from src.api.peloton_client import PelotonClient
     from src.services.data_manager import DataManager
-    from src.utils.mock_data import MockDataGenerator
     from src.config import (
         MAX_USER_WORKOUTS_FULL,
         MAX_USER_WORKOUTS_INCREMENTAL,
         MAX_FOLLOWER_WORKOUTS_FULL,
         MAX_FOLLOWER_WORKOUTS_INCREMENTAL,
-        PARALLEL_WORKERS
+        PARALLEL_WORKERS,
+        is_diagnostic_mode
     )
-    from src.config import is_diagnostic_mode
     from src.models.models import User, Workout
     
     # Initialize session state if needed
@@ -188,42 +187,6 @@ def _logout():
     st.session_state.client = None
     st.session_state.auth_token = None
     st.success("Logged out successfully")
-
-
-def _authenticate_user():
-    """Authenticate with Peloton API (legacy - kept for backward compatibility)"""
-    from src.api.peloton_client import PelotonClient
-    
-    bearer_token = os.getenv("PELOTON_BEARER_TOKEN")
-    session_id = os.getenv("PELOTON_SESSION_ID")
-    
-    # Try bearer token first (most reliable method)
-    if bearer_token and bearer_token.strip():
-        with st.spinner("Validating bearer token..."):
-            client = PelotonClient(bearer_token=bearer_token.strip())
-            if client.authenticate():
-                st.session_state.client = client
-                st.session_state.authenticated = True
-                st.success("✅ Bearer token validated successfully!")
-                return True
-            else:
-                st.warning("⚠️ Bearer token invalid or expired. Trying session ID...")
-    
-    # Try session ID next (browser cookie method)
-    if session_id and session_id.strip():
-        with st.spinner("Validating session ID..."):
-            client = PelotonClient(session_id=session_id.strip())
-            if client.authenticate():
-                st.session_state.client = client
-                st.session_state.authenticated = True
-                st.success("✅ Session validated successfully!")
-                return True
-            else:
-                st.warning("⚠️ Session ID invalid or expired.")
-    
-    # No valid credentials found
-    st.error("Please use the Login form above or set PELOTON_BEARER_TOKEN in your .env file")
-    return False
 
 
 def _render_export_button():
