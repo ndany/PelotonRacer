@@ -23,6 +23,7 @@ def render_sidebar():
         MAX_FOLLOWER_WORKOUTS_INCREMENTAL,
         PARALLEL_WORKERS
     )
+    from src.config import is_diagnostic_mode
     from src.models.models import User, Workout
     
     # Initialize session state if needed
@@ -38,90 +39,92 @@ def render_sidebar():
         st.session_state.auth_token = None
     
     with st.sidebar:
-        # 1. Authentication Section (top)
+        # -- 1. Authentication (always visible) --
         st.header("🔐 Authentication")
-        
-        if st.session_state.use_mock_data:
-            # Mock data mode
-            st.info("Using Mock Data")
-            if st.button("🎲 Load Mock Data", use_container_width=True, key="sidebar_load_mock"):
-                _load_mock_data()
-                st.rerun()
+
+        if not st.session_state.authenticated:
+            _render_login_section(show_advanced=is_diagnostic_mode())
         else:
-            # Real API mode
-            if not st.session_state.authenticated:
-                # Show login options
-                _render_login_section()
-            else:
-                st.success("✅ Authenticated")
-                if st.button("🚪 Logout", use_container_width=True, key="sidebar_logout"):
-                    _logout()
-                    st.rerun()
-        
+            st.success("✅ Authenticated")
+            if st.button("🚪 Logout", use_container_width=True, key="sidebar_logout"):
+                _logout()
+                st.rerun()
+
         st.divider()
-        
-        # 2. Navigation Links
+
+        # -- 2. Navigation (always visible) --
         st.header("📍 Navigation")
         st.page_link("app.py", label="Main Page", icon="🏠")
-        st.page_link("pages/data_load_status.py", label="Data Load Status", icon="📊")
-        
-        st.divider()
-        
-        # 3. Sync Controls (only show after authentication)
-        if st.session_state.authenticated or st.session_state.use_mock_data:
-            st.header("🔄 Sync")
-            
-            # Show last sync time
-            last_sync = st.session_state.data_manager.get_last_sync_time()
-            if last_sync > 0:
-                last_sync_str = datetime.fromtimestamp(last_sync).strftime('%Y-%m-%d %H:%M')
-                st.caption(f"Last sync: {last_sync_str}")
-            
-            if not st.session_state.use_mock_data:
+        st.page_link("pages/data_load_status.py", label="Data Load Stats", icon="📊")
+
+        # -- 3. Developer Tools (diagnostic mode only) --
+        if is_diagnostic_mode():
+            st.divider()
+            st.header("🔧 Developer Tools")
+
+            # 3a. Sync controls (only when authenticated)
+            if st.session_state.authenticated:
+                last_sync = st.session_state.data_manager.get_last_sync_time()
+                if last_sync > 0:
+                    last_sync_str = datetime.fromtimestamp(last_sync).strftime('%Y-%m-%d %H:%M')
+                    st.caption(f"Last sync: {last_sync_str}")
+
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button("🔄 Quick", use_container_width=True, help="Incremental sync - only new data", key="sidebar_quick_sync"):
+                    if st.button("🔄 Quick Sync", use_container_width=True, help="Incremental sync - only new data", key="sidebar_quick_sync"):
                         _sync_data(full_sync=False)
                 with col2:
-                    if st.button("📥 Full", use_container_width=True, help="Full sync - all historical data", key="sidebar_full_sync"):
+                    if st.button("📥 Full Sync", use_container_width=True, help="Full sync - all historical data", key="sidebar_full_sync"):
                         _sync_data(full_sync=True)
-            
-            # Show detailed sync status (persistent after sync completes)
-            if 'last_sync_results' in st.session_state:
-                results = st.session_state.last_sync_results
-                sync_time_str = datetime.fromtimestamp(results['timestamp']).strftime('%H:%M:%S')
-                
-                with st.expander(f"📋 Last Sync Details", expanded=False):
-                    st.markdown(f"**Type:** {results['sync_type']} Sync")
-                    st.markdown(f"**Time:** {sync_time_str}")
-                    if results['username']:
-                        st.markdown(f"**User:** {results['username']}")
-                    st.markdown(f"**Your Workouts:** {results['user_workouts']}")
-                    st.markdown(f"**Followers:** {results['followers']}")
-                    st.markdown(f"**Follower Workouts:** {results['follower_workouts']}")
-            
+
+                # Show sync details if available
+                if 'last_sync_results' in st.session_state:
+                    results = st.session_state.last_sync_results
+                    sync_time_str = datetime.fromtimestamp(results['timestamp']).strftime('%H:%M:%S')
+                    with st.expander("📋 Last Sync Details", expanded=False):
+                        st.markdown(f"**Type:** {results['sync_type']} Sync")
+                        st.markdown(f"**Time:** {sync_time_str}")
+                        if results['username']:
+                            st.markdown(f"**User:** {results['username']}")
+                        st.markdown(f"**Your Workouts:** {results['user_workouts']}")
+                        st.markdown(f"**Followers:** {results['followers']}")
+                        st.markdown(f"**Follower Workouts:** {results['follower_workouts']}")
+
+            # 3b. Clear all data
+            if st.button("🗑️ Clear All Data", use_container_width=True, key="sidebar_clear_data"):
+                st.session_state.data_manager.clear_all_data()
+                if 'common_rides' in st.session_state:
+                    st.session_state.common_rides = []
+                st.success("Data cleared!")
+                st.rerun()
+
+            # 3c. Export data (ZIP)
+            _render_export_button()
+
+            # 3d. Mock data (last section)
             st.divider()
-        
-        # 4. Data Management
-        if st.button("🗑️ Clear All Data", use_container_width=True, key="sidebar_clear_data"):
-            st.session_state.data_manager.clear_all_data()
-            if 'common_rides' in st.session_state:
-                st.session_state.common_rides = []
-            st.success("Data cleared!")
-            st.rerun()
+            st.subheader("🎲 Mock Data")
+            use_mock = st.toggle("Use Mock Data", value=st.session_state.use_mock_data, key="sidebar_mock_toggle")
+            if use_mock != st.session_state.use_mock_data:
+                st.session_state.use_mock_data = use_mock
+                st.rerun()
+            if st.session_state.use_mock_data:
+                if st.button("🎲 Load Mock Data", use_container_width=True, key="sidebar_load_mock"):
+                    _load_mock_data()
+                    st.rerun()
 
 
-def _render_login_section():
+def _render_login_section(show_advanced: bool = False):
     """Render the login section with multiple auth options"""
     from src.auth.peloton_auth import PelotonAuth, PelotonAuthError
-    
+
     # Primary login: Email/Password form (always visible)
     with st.form("login_form", clear_on_submit=False):
         email = st.text_input("Username/Email", key="login_email", placeholder="your@email.com")
         password = st.text_input("Password", type="password", key="login_password")
-        
+
         submitted = st.form_submit_button("🚀 Login", use_container_width=True)
-        
+
         if submitted:
             if not email or not password:
                 st.error("Please enter both email and password")
@@ -130,7 +133,7 @@ def _render_login_section():
                     try:
                         auth = PelotonAuth()
                         token = auth.login(email, password)
-                        
+
                         if _authenticate_with_token(token.access_token):
                             # Keep token in memory for API calls
                             st.session_state.auth_token = token
@@ -142,29 +145,25 @@ def _render_login_section():
                         st.error(f"❌ {str(e)}")
                     except Exception as e:
                         st.error(f"❌ Authentication failed: {str(e)}")
-    
-    # Advanced options (discouraged)
-    st.markdown("<small style='color: gray;'>Advanced Login Options - for debug only</small>", unsafe_allow_html=True)
-    
-    with st.expander("🔧 Advanced", expanded=False):
-        # Option 1: Connect with token from env
-        bearer_token = os.getenv("PELOTON_BEARER_TOKEN")
-        if bearer_token and bearer_token.strip():
-            st.caption("Use bearer token from .env file")
-            if st.button("🔐 Connect with Token", use_container_width=True, key="sidebar_auth_token"):
-                if _authenticate_with_token(bearer_token.strip()):
-                    st.rerun()
-        
-        st.divider()
-        
-        # Option 2: Manual token entry
-        st.caption("Manually enter a bearer token from your browser")
-        manual_token = st.text_input("Bearer Token", type="password", key="manual_token", 
-                                     placeholder="eyJ...")
-        if st.button("Validate Token", key="validate_manual_token"):
-            if manual_token:
-                if _authenticate_with_token(manual_token.strip()):
-                    st.rerun()
+
+    # Advanced options only in diagnostic mode
+    if show_advanced:
+        with st.expander("🔧 Advanced Login", expanded=False):
+            bearer_token = os.getenv("PELOTON_BEARER_TOKEN")
+            if bearer_token and bearer_token.strip():
+                st.caption("Use bearer token from .env file")
+                if st.button("🔐 Connect with Token", use_container_width=True, key="sidebar_auth_token"):
+                    if _authenticate_with_token(bearer_token.strip()):
+                        st.rerun()
+
+            st.divider()
+
+            st.caption("Manually enter a bearer token from your browser")
+            manual_token = st.text_input("Bearer Token", type="password", key="manual_token", placeholder="eyJ...")
+            if st.button("Validate Token", key="validate_manual_token"):
+                if manual_token:
+                    if _authenticate_with_token(manual_token.strip()):
+                        st.rerun()
 
 
 def _authenticate_with_token(bearer_token: str) -> bool:
@@ -225,6 +224,36 @@ def _authenticate_user():
     # No valid credentials found
     st.error("Please use the Login form above or set PELOTON_BEARER_TOKEN in your .env file")
     return False
+
+
+def _render_export_button():
+    """Render export ZIP button for all data files"""
+    import zipfile
+    import io
+    import glob
+
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+    json_files = glob.glob(os.path.join(data_dir, "*.json"))
+
+    if not json_files:
+        st.button("📤 Export Data", use_container_width=True, disabled=True, help="No data to export", key="sidebar_export_disabled")
+        return
+
+    # Build ZIP in memory
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for filepath in json_files:
+            zf.write(filepath, os.path.basename(filepath))
+    zip_buffer.seek(0)
+
+    st.download_button(
+        "📤 Export Data",
+        data=zip_buffer,
+        file_name="pelotonracer_data.zip",
+        mime="application/zip",
+        use_container_width=True,
+        key="sidebar_export"
+    )
 
 
 def _load_mock_data():
