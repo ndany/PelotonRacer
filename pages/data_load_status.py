@@ -17,7 +17,7 @@ load_dotenv()
 
 # Page config
 st.set_page_config(
-    page_title="Data Load Status - PelotonRacer",
+    page_title="Data Load Stats - PelotonRacer",
     page_icon="📊",
     layout="wide"
 )
@@ -153,7 +153,7 @@ def main():
     from src.utils.sidebar import render_sidebar
     render_sidebar()
     
-    st.title("📊 Data Load Status")
+    st.title("📊 Data Load Stats")
     st.markdown("View detailed statistics about loaded data")
     
     # Check authentication first - require auth before showing any data
