@@ -15,7 +15,6 @@ from src.models.models import User, Workout, CommonRide
 from src.services.data_manager import DataManager
 from src.services.race_analyzer import RaceAnalyzer
 from src.utils.helpers import format_duration, format_iso_date, get_metric_display_name
-from src.utils.mock_data import MockDataGenerator
 from src.config import (
     MAX_USER_WORKOUTS_FULL,
     MAX_USER_WORKOUTS_INCREMENTAL,
@@ -95,23 +94,6 @@ def authenticate_user():
     # No valid credentials found
     st.error("Please use the Login form in the sidebar or set PELOTON_BEARER_TOKEN in your .env file")
     return False
-
-
-def load_mock_data():
-    """Load mock data for testing"""
-    dm = st.session_state.data_manager
-    
-    with st.spinner("Generating mock data..."):
-        # Generate mock data
-        user_profile, user_workouts, followers, follower_workouts = MockDataGenerator.generate_mock_data()
-        
-        # Save to data manager
-        dm.save_user_profile(user_profile)
-        dm.save_workouts(user_workouts)
-        dm.save_followers(followers)
-        dm.save_follower_workouts(follower_workouts)
-        
-        st.success(f"✅ Mock data loaded: {len(user_workouts)} workouts, {len(followers)} followers")
 
 
 def sync_data(full_sync: bool = False):
