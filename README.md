@@ -12,7 +12,9 @@ A web application that creates virtual races by comparing your Peloton cycling s
   - Parallel fetching for faster sync (5 concurrent requests)
   - Incremental sync support - only fetch new data
   - Filters for cycling workouts only
-- **🎯 Common Rides**: Identifies rides taken by both you and your followers
+- **🎯 Two Comparison Modes**:
+  - **Compare Against Competitor**: Race against followers on common rides
+  - **Compare Repeated Workouts**: Track your own progress on rides you've taken multiple times
 - **👥 Competitor Selection**: Browse all followers alphabetically with common ride counts
 - **🏁 Virtual Race Visualization**: Compare performance metrics over time:
   - Output (watts)
@@ -98,8 +100,11 @@ If you need to use a bearer token, expand "Advanced Login Options" in the sideba
    - Click "Quick Sync" or "Full Sync" to fetch workout data
 
 4. **Start racing:**
-   - Select a competitor from the dropdown
-   - Choose a common ride
+   - Choose a comparison mode:
+     - **Compare Against Competitor**: Race against a follower on common rides
+     - **Compare Repeated Workouts**: Track your progress on rides you've taken multiple times
+   - Select a competitor (or view your own profile for repeated workouts)
+   - Choose a ride
    - View the comparison statistics and charts
 
 ## Project Structure
