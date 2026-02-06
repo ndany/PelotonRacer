@@ -26,8 +26,8 @@ wheels/
 .installed.cfg
 *.egg
 
-# Data files (optional - remove if you want to track data)
-data/*.json
+# Data files (user data should not be committed)
+data/
 
 # IDE
 .vscode/
