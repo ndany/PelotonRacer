@@ -305,6 +305,7 @@ def _render_export_button(disabled: bool = False, disabled_tooltip: str = "Authe
 
 def _load_mock_data():
     """Load mock data for testing"""
+    import time
     from src.utils.mock_data import MockDataGenerator
     
     dm = st.session_state.data_manager
@@ -313,11 +314,12 @@ def _load_mock_data():
         # Generate mock data
         user_profile, user_workouts, followers, follower_workouts = MockDataGenerator.generate_mock_data()
         
-        # Save to data manager
+        # Save to data manager (all required files)
         dm.save_user_profile(user_profile)
         dm.save_workouts(user_workouts)
         dm.save_followers(followers)
         dm.save_follower_workouts(follower_workouts)
+        dm.save_sync_metadata(int(time.time()), user_profile.user_id)
         
         st.success(f"✅ Mock data loaded: {len(user_workouts)} workouts, {len(followers)} followers")
 
@@ -409,33 +411,37 @@ def _sync_data(full_sync: bool = False):
 
         # Fetch in parallel with progress tracking
         follower_workouts = {}
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        completed = 0
+        
+        if followers:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            completed = 0
 
-        # Use ThreadPoolExecutor for parallel API calls
-        with ThreadPoolExecutor(max_workers=PARALLEL_WORKERS) as executor:
-            # Submit all tasks
-            future_to_follower = {
-                executor.submit(fetch_follower_workouts, f): f
-                for f in followers
-            }
+            # Use ThreadPoolExecutor for parallel API calls
+            with ThreadPoolExecutor(max_workers=PARALLEL_WORKERS) as executor:
+                # Submit all tasks
+                future_to_follower = {
+                    executor.submit(fetch_follower_workouts, f): f
+                    for f in followers
+                }
 
-            # Process completed tasks as they finish
-            for future in as_completed(future_to_follower):
-                user_id, username, workouts, error = future.result()
-                completed += 1
+                # Process completed tasks as they finish
+                for future in as_completed(future_to_follower):
+                    user_id, username, workouts, error = future.result()
+                    completed += 1
 
-                if error:
-                    status_text.warning(f"⚠️ Error fetching {username}: {error}")
-                else:
-                    follower_workouts[user_id] = workouts
-                    status_text.text(f"✅ {username}: {len(workouts)} workouts ({completed}/{len(followers)})")
+                    if error:
+                        status_text.warning(f"⚠️ Error fetching {username}: {error}")
+                    else:
+                        follower_workouts[user_id] = workouts
+                        status_text.text(f"✅ {username}: {len(workouts)} workouts ({completed}/{len(followers)})")
 
-                progress_bar.progress(completed / len(followers))
+                    progress_bar.progress(completed / len(followers))
 
-        progress_bar.empty()
-        status_text.empty()
+            progress_bar.empty()
+            status_text.empty()
+        else:
+            st.info("ℹ️ No followers found - skipping follower workout sync")
 
         # Save follower workouts (merge if incremental)
         dm.save_follower_workouts(follower_workouts, merge=(last_sync_time > 0))

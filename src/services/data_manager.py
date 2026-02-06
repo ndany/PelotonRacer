@@ -265,3 +265,23 @@ class DataManager:
     def has_data(self) -> bool:
         """Check if any data exists"""
         return any(f.exists() for f in [self.user_profile_file, self.workouts_file])
+    
+    def has_complete_sync(self) -> bool:
+        """
+        Check if a complete sync has been performed.
+        
+        A complete sync includes:
+        - User profile
+        - User workouts
+        - Followers list
+        - Follower workouts (required for common rides)
+        
+        Returns:
+            True if all required data files exist
+        """
+        return all(f.exists() for f in [
+            self.user_profile_file,
+            self.workouts_file,
+            self.followers_file,
+            self.follower_workouts_file
+        ])
