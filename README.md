@@ -9,8 +9,9 @@ A web application that creates virtual races by comparing your Peloton cycling s
 ## Features
 
 - **🔄 Data Sync**: Fetches your workouts and your followers' workouts from Peloton API
+  - **Quick Sync**: Fetches 500 most recent workouts per user (~55 seconds)
+  - **Full Sync**: Fetches up to 3000 workouts per user (~2 minutes)
   - Parallel fetching for faster sync (5 concurrent requests)
-  - Incremental sync support - only fetch new data
   - Filters for cycling workouts only
 - **🎯 Two Comparison Modes**:
   - **Compare Against Competitor**: Race against followers on common rides
@@ -76,7 +77,13 @@ Simply enter your Peloton username/email and password in the sidebar login form.
 
 ### Option 2: Bearer Token (Advanced/Debug)
 
-If you need to use a bearer token, expand "Advanced Login Options" in the sidebar:
+Bearer token login is available in **Diagnostic Mode** only. First enable it in `.env`:
+
+```env
+DIAGNOSTIC_MODE=true
+```
+
+Then expand "Advanced Login" in the Developer Tools section:
 
 1. Log into [members.onepeloton.com](https://members.onepeloton.com) in your browser
 2. Open Developer Tools (F12)
@@ -111,17 +118,22 @@ If you need to use a bearer token, expand "Advanced Login Options" in the sideba
 
 ```
 PelotonRacer/
-├── app.py                       # Streamlit UI application
+├── app.py                       # Streamlit app entry point
+├── views/                       # Streamlit pages
+│   ├── main.py                  # Main race comparison page
+│   └── data_load_status.py      # Data loading statistics
 ├── requirements.txt             # Python dependencies
 ├── .env.example                 # Template for environment variables
 ├── .gitignore
 ├── README.md
 ├── data/                        # Local JSON storage (git-ignored)
-│   ├── user_profile.json
-│   ├── workouts.json
-│   ├── followers.json
-│   ├── follower_workouts.json
-│   └── sync_metadata.json
+│   ├── users/<user_id>/         # User-specific data
+│   │   ├── user_profile.json
+│   │   ├── workouts.json
+│   │   ├── followers.json
+│   │   ├── follower_workouts.json
+│   │   └── sync_metadata.json
+│   └── mock/                    # Mock data for testing
 └── src/
     ├── config.py                # Centralized configuration
     ├── api/
@@ -141,13 +153,22 @@ PelotonRacer/
 
 ## Configuration
 
-Key settings in `src/config.py`:
+### Environment Variables (`.env`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PELOTON_BEARER_TOKEN` | - | Optional bearer token for debug login |
+| `DIAGNOSTIC_MODE` | `false` | Show Developer Tools (Advanced Login, Mock Data) |
+
+### Sync Settings (`src/config.py`)
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `API_PAGE_SIZE` | 100 | Peloton API max items per page |
-| `MAX_USER_WORKOUTS_FULL` | 3000 | Max workouts to fetch for user |
-| `MAX_FOLLOWER_WORKOUTS_FULL` | 2000 | Max workouts per follower |
+| `MAX_USER_WORKOUTS_FULL` | 3000 | Full sync: max workouts for user |
+| `MAX_USER_WORKOUTS_INCREMENTAL` | 500 | Quick sync: max workouts for user |
+| `MAX_FOLLOWER_WORKOUTS_FULL` | 3000 | Full sync: max workouts per follower |
+| `MAX_FOLLOWER_WORKOUTS_INCREMENTAL` | 500 | Quick sync: max workouts per follower |
 | `PARALLEL_WORKERS` | 5 | Concurrent API requests |
 
 ## API Reusability

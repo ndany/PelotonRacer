@@ -54,21 +54,45 @@ class DataManager:
         
         return True
     
-    def __init__(self, data_dir: str = "data"):
+    # Base directories for different data types
+    BASE_DATA_DIR = "data"
+    MOCK_DATA_DIR = "data/mock"
+    USERS_DATA_DIR = "data/users"
+
+    def __init__(self, data_dir: str = None):
         """
         Initialize DataManager
-        
+
+        Args:
+            data_dir: Directory to store JSON files. If None, uses BASE_DATA_DIR.
+        """
+        self.set_data_dir(data_dir or self.BASE_DATA_DIR)
+
+    def set_data_dir(self, data_dir: str) -> None:
+        """
+        Set/change the data directory.
+
         Args:
             data_dir: Directory to store JSON files
         """
         self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(exist_ok=True)
-        
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+
         self.user_profile_file = self.data_dir / "user_profile.json"
         self.workouts_file = self.data_dir / "workouts.json"
         self.followers_file = self.data_dir / "followers.json"
         self.follower_workouts_file = self.data_dir / "follower_workouts.json"
         self.sync_metadata_file = self.data_dir / "sync_metadata.json"
+
+    @classmethod
+    def get_mock_data_dir(cls) -> str:
+        """Get the directory path for mock data"""
+        return cls.MOCK_DATA_DIR
+
+    @classmethod
+    def get_user_data_dir(cls, user_id: str) -> str:
+        """Get the directory path for a specific user's data"""
+        return f"{cls.USERS_DATA_DIR}/{user_id}"
     
     def save_sync_metadata(self, last_sync_time: int, user_id: str = None) -> None:
         """Save sync metadata including last sync timestamp"""
