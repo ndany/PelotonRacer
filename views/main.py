@@ -146,6 +146,15 @@ def main():
             st.info("👈 Please sync your data to get started!")
         return
 
+    # Check if sync is incomplete (has profile/workouts but missing follower data)
+    if not dm.has_complete_sync():
+        st.warning(
+            "⚠️ **Sync Incomplete**: Your follower workout data hasn't been synced yet.\n\n"
+            "To find common rides with your followers, please run a **Full Sync** from the sidebar. "
+            "This will fetch your followers' workout data so we can compare your rides."
+        )
+        # Allow them to see their own data, but show the warning prominently
+
     # Load data
     if not st.session_state.common_rides:
         load_common_rides()
@@ -252,7 +261,12 @@ def main():
         # Show summary
         total_common = len(common_rides)
         followers_with_common = sum(1 for c in common_ride_counts.values() if c > 0)
-        st.info(f"📊 You have **{total_common}** total common rides with **{followers_with_common}** of your **{len(followers)}** followers")
+        
+        if total_common == 0 and not dm.has_complete_sync():
+            # Don't show confusing "0 common rides" - the warning above explains the issue
+            pass
+        else:
+            st.info(f"📊 You have **{total_common}** total common rides with **{followers_with_common}** of your **{len(followers)}** followers")
 
         # First: Select Competitor (single selection) - show ALL followers
         st.header("1️⃣ Select a Competitor")
