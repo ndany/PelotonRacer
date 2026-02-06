@@ -15,21 +15,7 @@ from src.services.race_analyzer import RaceAnalyzer
 # Load environment variables
 load_dotenv()
 
-# Page config
-st.set_page_config(
-    page_title="Data Load Stats - PelotonRacer",
-    page_icon="📊",
-    layout="wide"
-)
-
-# Hide the default Streamlit page navigation in sidebar
-st.markdown("""
-<style>
-    [data-testid="stSidebarNav"] {
-        display: none;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Note: Page config is handled by app.py entry point via st.navigation
 
 # Initialize session state
 if 'data_manager' not in st.session_state:
@@ -245,5 +231,5 @@ def main():
         st.warning("No data loaded. Please authenticate and sync first.")
 
 
-if __name__ == "__main__":
-    main()
+# Called via st.navigation from app.py
+main()
