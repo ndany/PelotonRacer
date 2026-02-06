@@ -3,6 +3,16 @@ Configuration constants for PelotonRacer
 Centralized settings for API limits, sync behavior, and defaults
 """
 
+import os
+from dotenv import load_dotenv
+
+
+def is_diagnostic_mode() -> bool:
+    """Check if diagnostic mode is enabled. Re-reads .env for dynamic detection."""
+    load_dotenv(override=True)
+    return os.getenv("DIAGNOSTIC_MODE", "false").lower() == "true"
+
+
 # =============================================================================
 # API LIMITS
 # =============================================================================
