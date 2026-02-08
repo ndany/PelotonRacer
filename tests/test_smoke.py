@@ -290,10 +290,11 @@ def test_workout_serialization(sample_workout):
 # =============================================================================
 
 @pytest.mark.unit
-def test_data_manager_initialization(temp_data_dir):
+def test_data_manager_initialization(temp_data_dir, monkeypatch):
     """Verify DataManager can be initialized"""
     from src.services.data_manager import DataManager
 
+    monkeypatch.setattr(DataManager, 'ALLOWED_BASE_DIR', temp_data_dir.parent)
     manager = DataManager(str(temp_data_dir))
     assert manager.data_dir.exists()
 

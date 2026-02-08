@@ -59,6 +59,9 @@ class DataManager:
     MOCK_DATA_DIR = "data/mock"
     USERS_DATA_DIR = "data/users"
 
+    # Allowed base directory for path traversal protection
+    ALLOWED_BASE_DIR = Path.cwd()
+
     def __init__(self, data_dir: str = None):
         """
         Initialize DataManager
@@ -74,7 +77,16 @@ class DataManager:
 
         Args:
             data_dir: Directory to store JSON files
+
+        Raises:
+            ValueError: If the resolved path is outside the allowed base directory
         """
+        resolved_path = Path(data_dir).resolve()
+        resolved_base = self.ALLOWED_BASE_DIR.resolve()
+
+        if not str(resolved_path).startswith(str(resolved_base)):
+            raise ValueError("Data directory must be within the project directory")
+
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -91,8 +103,22 @@ class DataManager:
 
     @classmethod
     def get_user_data_dir(cls, user_id: str) -> str:
-        """Get the directory path for a specific user's data"""
-        return f"{cls.USERS_DATA_DIR}/{user_id}"
+        """Get the directory path for a specific user's data
+
+        Args:
+            user_id: The user ID to build a data directory path for
+
+        Returns:
+            The data directory path for the given user
+
+        Raises:
+            ValueError: If user_id contains path traversal characters
+        """
+        # Sanitize user_id to prevent path traversal
+        safe_user_id = user_id.replace("/", "").replace("\\", "").replace("..", "")
+        if safe_user_id != user_id:
+            raise ValueError("Invalid user ID")
+        return f"{cls.USERS_DATA_DIR}/{safe_user_id}"
     
     def save_sync_metadata(self, last_sync_time: int, user_id: str = None) -> None:
         """Save sync metadata including last sync timestamp"""
