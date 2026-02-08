@@ -1205,3 +1205,544 @@ def test_timeout_handling_in_refresh():
 
     with pytest.raises(Exception):  # Should raise some exception
         auth.refresh(token)
+
+
+# =============================================================================
+# MISSING BRANCH COVERAGE TESTS
+# =============================================================================
+
+@pytest.mark.unit
+@responses.activate
+def test_initiate_auth_flow_csrf_from_response_cookies():
+    """Test CSRF extraction from response cookies fallback path (line 186)"""
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    # Mock response that sets CSRF in general cookies (not with specific path)
+    def callback(request):
+        headers = {"Set-Cookie": "_csrf=csrf_from_response; Path=/"}
+        return (200, headers, "Login page")
+
+    responses.add_callback(
+        responses.GET,
+        auth._build_authorize_url(),
+        callback=callback
+    )
+
+    login_url, csrf_token = auth._initiate_auth_flow()
+
+    # Should extract from response cookies
+    assert csrf_token == "csrf_from_response"
+
+
+@pytest.mark.unit
+@responses.activate
+def test_initiate_auth_flow_state_extraction_from_redirect():
+    """Test state parameter extraction from query params (line 195->198)"""
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+    original_state = auth.config.state
+
+    # Mock response that redirects with new state parameter
+    redirect_url = f"https://auth.onepeloton.com/login?state=updated_state_123"
+
+    responses.add(
+        responses.GET,
+        auth._build_authorize_url(),
+        status=302,
+        headers={
+            "Location": redirect_url,
+            "Set-Cookie": "_csrf=csrf_token; Path=/usernamepassword/login"
+        }
+    )
+
+    responses.add(
+        responses.GET,
+        redirect_url,
+        status=200,
+        headers={"Set-Cookie": "_csrf=csrf_token; Path=/usernamepassword/login"}
+    )
+
+    login_url, csrf_token = auth._initiate_auth_flow()
+
+    # State should be updated from redirect URL
+    assert auth.config.state == "updated_state_123"
+    assert auth.config.state != original_state
+
+
+@pytest.mark.unit
+@responses.activate
+def test_submit_credentials_with_hidden_form_response():
+    """Test credential submission handles 200 response with hidden form (line 249-250)"""
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    # Return HTML form instead of redirect
+    html_form = '''
+    <html>
+    <form method="POST" action="/continue">
+        <input type="hidden" name="state" value="state_val" />
+        <input type="hidden" name="wa" value="wsignin1.0" />
+    </form>
+    </html>
+    '''
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=200,
+        body=html_form
+    )
+
+    # Mock the form submission
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/continue",
+        status=302,
+        headers={"Location": f"{auth.config.redirect_uri}?code=extracted_code"}
+    )
+
+    result = auth._submit_credentials(
+        "https://auth.onepeloton.com/login",
+        "csrf_token",
+        "user@example.com",
+        "password"
+    )
+
+    # Should extract code from form submission redirect
+    assert result == "extracted_code"
+
+
+@pytest.mark.unit
+@responses.activate
+def test_submit_credentials_error_without_json():
+    """Test credential submission handles non-JSON error response (line 258-261)"""
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    # Return error status with non-JSON body
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=401,
+        body="Invalid credentials"
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "wrongpass"
+        )
+
+    assert "Credential submission failed" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@responses.activate
+def test_submit_credentials_error_description_field():
+    """Test credential submission extracts error_description field"""
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=401,
+        json={"error_description": "Invalid username or password"}
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "wrongpass"
+        )
+
+    assert "Invalid username or password" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@responses.activate
+def test_parse_hidden_form_alternate_attribute_order():
+    """Test form parsing handles name-value-type attribute order (line 302)"""
+    auth = PelotonAuth()
+
+    # HTML with name and value before type
+    html_alternate_order = '''
+    <form action="/continue">
+        <input name="field1" value="value1" type="hidden" />
+        <input type="hidden" name="field2" value="value2" />
+    </form>
+    '''
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/continue",
+        status=302,
+        headers={"Location": f"{auth.config.redirect_uri}?code=test_code"}
+    )
+
+    code = auth._parse_and_submit_hidden_form(html_alternate_order)
+
+    assert code == "test_code"
+
+
+@pytest.mark.unit
+@responses.activate
+def test_parse_hidden_form_value_before_name():
+    """Test form parsing handles value-before-name pattern (line 314-317)"""
+    auth = PelotonAuth()
+
+    # HTML with value attribute before name attribute
+    html_value_first = '''
+    <form action="/continue">
+        <input type="hidden" value="val_first" name="field_vf" />
+    </form>
+    '''
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/continue",
+        status=302,
+        headers={"Location": f"{auth.config.redirect_uri}?code=vf_code"}
+    )
+
+    code = auth._parse_and_submit_hidden_form(html_value_first)
+
+    assert code == "vf_code"
+
+
+@pytest.mark.unit
+@responses.activate
+def test_parse_hidden_form_duplicate_field_names():
+    """Test form parsing deduplication (line 306)"""
+    auth = PelotonAuth()
+
+    # HTML with duplicate field names (first value should win)
+    html_duplicates = '''
+    <form action="/continue">
+        <input type="hidden" name="state" value="first_value" />
+        <input name="state" value="second_value" />
+    </form>
+    '''
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/continue",
+        status=302,
+        headers={"Location": f"{auth.config.redirect_uri}?code=dup_code"}
+    )
+
+    code = auth._parse_and_submit_hidden_form(html_duplicates)
+
+    # Should successfully parse and not error on duplicates
+    assert code == "dup_code"
+
+
+@pytest.mark.unit
+def test_follow_redirects_no_location_header():
+    """Test redirect following handles missing Location header (line 358)"""
+    auth = PelotonAuth()
+
+    # Response with redirect status but no Location header
+    response = Mock()
+    response.status_code = 302
+    response.headers = {}  # No Location header
+    response.url = None
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._follow_auth_redirects(response)
+
+    assert "authorization code" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@responses.activate
+def test_follow_redirects_max_redirects_exceeded():
+    """Test redirect following stops at max redirects (line 352->373)"""
+    auth = PelotonAuth()
+
+    # Set up 16 redirects (exceeds max of 15)
+    for i in range(16):
+        responses.add(
+            responses.GET,
+            f"https://auth.onepeloton.com/redirect{i}",
+            status=302,
+            headers={"Location": f"https://auth.onepeloton.com/redirect{i+1}"}
+        )
+
+    # Initial response starts the chain
+    initial_response = Mock()
+    initial_response.status_code = 302
+    initial_response.headers = {"Location": "https://auth.onepeloton.com/redirect0"}
+    initial_response.url = None
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._follow_auth_redirects(initial_response)
+
+    assert "authorization code" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@responses.activate
+def test_follow_redirects_code_in_final_url():
+    """Test redirect following extracts code from final response URL (line 375-378)"""
+    auth = PelotonAuth()
+
+    # Initial redirect
+    responses.add(
+        responses.GET,
+        "https://auth.onepeloton.com/step1",
+        status=200  # Final response, no redirect
+    )
+
+    # Mock response with final URL containing code
+    initial_response = Mock()
+    initial_response.status_code = 302
+    initial_response.headers = {"Location": "https://auth.onepeloton.com/step1"}
+
+    # The session.get will return a response with a url attribute
+    with patch.object(auth.session, 'get') as mock_get:
+        final_mock = Mock()
+        final_mock.status_code = 200
+        final_mock.url = f"{auth.config.redirect_uri}?code=final_url_code"
+        final_mock.headers = {}
+        mock_get.return_value = final_mock
+
+        code = auth._follow_auth_redirects(initial_response)
+
+        assert code == "final_url_code"
+
+
+@pytest.mark.unit
+@responses.activate
+def test_exchange_code_non_json_error_response():
+    """Test token exchange handles non-JSON error response (line 416)"""
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    # Return error status with non-JSON response
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}{auth.config.token_path}",
+        status=500,
+        body="Internal Server Error"
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._exchange_code_for_token("code123")
+
+    assert "HTTP 500" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@responses.activate
+def test_refresh_token_non_json_error():
+    """Test refresh handles non-JSON error response (line 518)"""
+    auth = PelotonAuth()
+
+    token = TokenResponse(
+        access_token="old_access",
+        refresh_token="refresh_token"
+    )
+
+    # Return error with non-JSON body
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}{auth.config.token_path}",
+        status=503,
+        body="Service Unavailable"
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth.refresh(token)
+
+    assert "HTTP 503" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@responses.activate
+def test_submit_credentials_301_redirect():
+    """Test credential submission handles 301 redirect"""
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=301,
+        headers={"Location": f"{auth.config.redirect_uri}?code=code_301"}
+    )
+
+    result = auth._submit_credentials(
+        "https://auth.onepeloton.com/login",
+        "csrf_token",
+        "user@example.com",
+        "password"
+    )
+
+    assert auth.config.redirect_uri in result
+
+
+@pytest.mark.unit
+@responses.activate
+def test_submit_credentials_303_redirect():
+    """Test credential submission handles 303 redirect"""
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=303,
+        headers={"Location": f"{auth.config.redirect_uri}?code=code_303"}
+    )
+
+    result = auth._submit_credentials(
+        "https://auth.onepeloton.com/login",
+        "csrf_token",
+        "user@example.com",
+        "password"
+    )
+
+    assert auth.config.redirect_uri in result
+
+
+@pytest.mark.unit
+@responses.activate
+def test_follow_redirects_with_307_and_308():
+    """Test redirect following handles 307 and 308 redirects"""
+    auth = PelotonAuth()
+
+    # Test 307 redirect
+    responses.add(
+        responses.GET,
+        "https://auth.onepeloton.com/step1",
+        status=307,
+        headers={"Location": f"{auth.config.redirect_uri}?code=code_307"}
+    )
+
+    initial_response = Mock()
+    initial_response.status_code = 307
+    initial_response.headers = {"Location": "https://auth.onepeloton.com/step1"}
+    initial_response.url = None
+
+    code = auth._follow_auth_redirects(initial_response)
+
+    assert code == "code_307"
+
+
+@pytest.mark.unit
+@responses.activate
+def test_follow_redirects_308_permanent():
+    """Test redirect following handles 308 permanent redirect"""
+    auth = PelotonAuth()
+
+    responses.add(
+        responses.GET,
+        "https://auth.onepeloton.com/step1",
+        status=308,
+        headers={"Location": f"{auth.config.redirect_uri}?code=code_308"}
+    )
+
+    initial_response = Mock()
+    initial_response.status_code = 308
+    initial_response.headers = {"Location": "https://auth.onepeloton.com/step1"}
+    initial_response.url = None
+
+    code = auth._follow_auth_redirects(initial_response)
+
+    assert code == "code_308"
+
+
+@pytest.mark.unit
+@responses.activate
+def test_submit_credentials_redirect_without_location():
+    """Test credential submission handles redirect without Location header"""
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    # Return redirect status without Location header (edge case)
+    html_form = '''
+    <form action="/callback">
+        <input type="hidden" name="code" value="backup_code" />
+    </form>
+    '''
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=200,
+        body=html_form
+    )
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/callback",
+        status=302,
+        headers={"Location": f"{auth.config.redirect_uri}?code=final_backup"}
+    )
+
+    result = auth._submit_credentials(
+        "https://auth.onepeloton.com/login",
+        "csrf_token",
+        "user@example.com",
+        "password"
+    )
+
+    assert result == "final_backup"
+
+
+@pytest.mark.unit
+@pytest.mark.security
+def test_login_session_reset():
+    """Test login method resets session for fresh auth (line 461)"""
+    auth = PelotonAuth()
+
+    # Add some data to session
+    old_session = auth.session
+    auth.session.headers.update({"X-Custom": "test"})
+
+    # Mock all the required endpoints for login
+    with patch.object(auth, '_initiate_auth_flow') as mock_init:
+        with patch.object(auth, '_submit_credentials') as mock_submit:
+            with patch.object(auth, '_exchange_code_for_token') as mock_exchange:
+                mock_init.return_value = ("https://login.url", "csrf_token")
+                mock_submit.return_value = "auth_code_123"
+                mock_exchange.return_value = TokenResponse(access_token="test_token")
+
+                # Execute login
+                token = auth.login("user@example.com", "password")
+
+                # Session should be a new instance
+                assert auth.session is not old_session
+                assert "X-Custom" not in auth.session.headers
+                assert token.access_token == "test_token"
+
+
+@pytest.mark.unit
+@pytest.mark.security
+def test_login_generates_fresh_pkce_params():
+    """Test login generates new PKCE parameters each time"""
+    auth = PelotonAuth()
+
+    # Set initial PKCE params
+    auth.config.code_verifier = "old_verifier"
+    auth.config.code_challenge = "old_challenge"
+
+    with patch.object(auth, '_initiate_auth_flow') as mock_init:
+        with patch.object(auth, '_submit_credentials') as mock_submit:
+            with patch.object(auth, '_exchange_code_for_token') as mock_exchange:
+                mock_init.return_value = ("https://login.url", "csrf_token")
+                mock_submit.return_value = "auth_code"
+                mock_exchange.return_value = TokenResponse(access_token="token")
+
+                token = auth.login("user@example.com", "password")
+
+                # PKCE params should be regenerated
+                assert auth.config.code_verifier != "old_verifier"
+                assert auth.config.code_challenge != "old_challenge"
+                assert len(auth.config.code_verifier) == 64
