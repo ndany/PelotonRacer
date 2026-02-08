@@ -1271,6 +1271,71 @@ def test_initiate_auth_flow_state_extraction_from_redirect():
 
 
 @pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_initiate_auth_flow_redirect_without_state_parameter():
+    """
+    Test auth flow initiation when redirect URL does NOT include state parameter.
+
+    SECURITY CONCERN - CSRF Protection Gap:
+    The 'state' parameter is critical for Cross-Site Request Forgery (CSRF) protection
+    in OAuth flows. It ensures that the authorization response matches the original request.
+
+    Attack Scenario:
+    1. Attacker initiates OAuth flow and obtains a valid authorization URL
+    2. Attacker tricks victim into clicking malicious link with attacker's authorization code
+    3. If state validation is missing/weak, victim's session could be linked to attacker's account
+    4. Victim's data/actions are now accessible to attacker
+
+    Current Behavior:
+    The code at line 195-196 only updates state if present in redirect URL.
+    When state is missing, the original state value is preserved.
+    This is permissive behavior - the auth flow continues without validation.
+
+    This test documents that missing state does NOT cause immediate failure,
+    which could be a security gap if subsequent validation is also missing.
+
+    Covers branch: line 195 (else path - when "state" NOT in query_params)
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+    original_state = auth.config.state
+
+    # Mock response that redirects WITHOUT state parameter (security gap scenario)
+    redirect_url = "https://auth.onepeloton.com/login"  # No state in query params
+
+    responses.add(
+        responses.GET,
+        auth._build_authorize_url(),
+        status=302,
+        headers={
+            "Location": redirect_url,
+            "Set-Cookie": "_csrf=csrf_token; Path=/usernamepassword/login"
+        }
+    )
+
+    responses.add(
+        responses.GET,
+        redirect_url,
+        status=200,
+        headers={"Set-Cookie": "_csrf=csrf_token; Path=/usernamepassword/login"}
+    )
+
+    # Execute auth flow initiation
+    login_url, csrf_token = auth._initiate_auth_flow()
+
+    # OBSERVED BEHAVIOR: Method completes successfully (permissive)
+    # State is NOT updated - original value is preserved
+    assert auth.config.state == original_state
+    assert "state=" not in redirect_url
+    assert csrf_token == "csrf_token"
+
+    # SECURITY RECOMMENDATION:
+    # Consider adding validation to REQUIRE state parameter in redirect URL
+    # or document that state validation happens at a later stage in the flow
+
+
+@pytest.mark.unit
 @responses.activate
 def test_submit_credentials_with_hidden_form_response():
     """Test credential submission handles 200 response with hidden form (line 249-250)"""
