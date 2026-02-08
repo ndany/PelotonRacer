@@ -956,6 +956,20 @@ def test_empty_followers_save_and_load(data_manager_with_temp_dir):
 
 
 @pytest.mark.unit
+def test_load_followers_when_file_does_not_exist(data_manager_with_temp_dir):
+    """Test loading followers when file doesn't exist returns empty list"""
+    manager = data_manager_with_temp_dir
+
+    # Don't create file - just try to load
+    assert not manager.followers_file.exists()
+
+    # Load should return empty list without error
+    loaded = manager.load_followers()
+    assert loaded == []
+    assert isinstance(loaded, list)
+
+
+@pytest.mark.unit
 def test_empty_follower_workouts_save_and_load(data_manager_with_temp_dir):
     """Test saving and loading empty follower workouts"""
     manager = data_manager_with_temp_dir
