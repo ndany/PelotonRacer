@@ -57,11 +57,8 @@ bandit-report.json
 # Generated test reports (regenerate with: pytest --cov)
 docs/testing/coverage-report.md
 
-# Generated security audit reports (contain vulnerability details + regenerable)
-docs/security/audit-*.md
-docs/security/vulnerabilities.md
-docs/security/remediation-roadmap.md
-docs/security/SECURITY_SUMMARY.md
+# Generated security audit reports (regenerate with: ./scripts/run_security_audit.sh --report)
+docs/security/audits/
 
 # Agent work summaries (temporary metadata)
 docs/**/ISSUE-*-SUMMARY.md
