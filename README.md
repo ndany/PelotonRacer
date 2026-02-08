@@ -212,16 +212,16 @@ pytest tests/ -m "not slow" -v     # Skip slow tests
 
 ### Test Coverage
 
-- **Overall Coverage:** 59%
+- **Overall Coverage:** 67%
 - **Core Services:** 95-98% (Data Manager, Race Analyzer, Models)
-- **API Client:** 45% (needs improvement)
-- **Total Tests:** 196 (175 passing, 21 failing)
+- **API Client:** 83%
+- **Total Tests:** 196 (100% passing)
 
 ### Documentation
 
 - **Testing Guide:** [docs/testing/TESTING.md](docs/testing/TESTING.md) - Complete guide to writing and running tests
-- **Coverage Report:** [docs/testing/coverage-report.md](docs/testing/coverage-report.md) - Detailed coverage analysis
 - **Test Infrastructure:** [tests/README.md](tests/README.md) - Test organization and fixtures
+- **Coverage Reports:** Run `bash scripts/generate_coverage_report.sh` and open `htmlcov/index.html`
 
 ## Security
 

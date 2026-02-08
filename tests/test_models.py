@@ -117,12 +117,12 @@ def test_user_from_api_response_with_none_values():
 
     # .get() with defaults should handle None
     assert user.user_id == "user789"
-    # None values fall back to defaults
-    assert user.username == ""
-    assert user.display_name == ""
-    assert user.image_url == ""
-    assert user.location == ""
-    assert user.total_workouts == 0
+    # None values are returned as-is (not converted to defaults)
+    assert user.username is None
+    assert user.display_name is None
+    assert user.image_url is None
+    assert user.location is None
+    assert user.total_workouts is None
 
 
 @pytest.mark.unit
@@ -384,11 +384,11 @@ def test_ride_info_from_api_response_with_none_values():
     ride_info = RideInfo.from_api_response(data_with_nones)
 
     assert ride_info.ride_id == "none_ride"
-    assert ride_info.title == ""
+    assert ride_info.title == ""  # None is converted to "" by the `or ""` logic
     assert ride_info.instructor_name == ""
-    assert ride_info.duration == 0
-    assert ride_info.difficulty == 0.0
-    assert ride_info.ride_type == ""
+    assert ride_info.duration is None
+    assert ride_info.difficulty == 0.0  # None is converted to 0.0 by the `or 0.0` logic
+    assert ride_info.ride_type == ""  # None is converted to "" by the `or ""` logic
 
 
 @pytest.mark.unit

@@ -525,6 +525,7 @@ def test_load_follower_workouts_filters_invalid_rides(data_manager_with_temp_dir
 # =============================================================================
 
 @pytest.mark.unit
+@pytest.mark.security
 def test_set_data_dir_with_path_traversal_attack(temp_data_dir):
     """SECURITY: Test that path traversal attempts are NOT prevented (vulnerability exists)"""
     # This test demonstrates the VULNERABILITY - set_data_dir accepts arbitrary paths
@@ -543,6 +544,7 @@ def test_set_data_dir_with_path_traversal_attack(temp_data_dir):
 
 
 @pytest.mark.unit
+@pytest.mark.security
 def test_path_traversal_in_initialization(temp_data_dir):
     """SECURITY: Test path traversal in DataManager initialization"""
     # Create a path outside the intended data directory
@@ -572,6 +574,7 @@ def test_file_operations_follow_set_data_dir(temp_data_dir, sample_user):
 
 
 @pytest.mark.unit
+@pytest.mark.security
 def test_symbolic_link_handling(temp_data_dir, sample_user):
     """SECURITY: Test handling of symbolic links (potential vulnerability)"""
     manager = DataManager(str(temp_data_dir))
@@ -605,6 +608,7 @@ def test_symbolic_link_handling(temp_data_dir, sample_user):
 
 
 @pytest.mark.unit
+@pytest.mark.security
 def test_error_message_does_not_expose_full_paths(data_manager_with_temp_dir, capsys):
     """SECURITY: Test that error messages don't expose sensitive file paths"""
     manager = data_manager_with_temp_dir
@@ -883,6 +887,7 @@ def test_clear_all_data_when_no_files_exist(data_manager_with_temp_dir):
 
 
 @pytest.mark.unit
+@pytest.mark.security
 def test_path_traversal_with_relative_paths(temp_data_dir):
     """SECURITY: Test path traversal with various relative path patterns"""
     manager = DataManager(str(temp_data_dir))
