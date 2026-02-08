@@ -13,6 +13,8 @@ pre-commit install
 
 | Task | Command |
 |------|---------|
+| Run security tests | `./scripts/run_security_audit.sh` |
+| Full audit with report | `./scripts/run_security_audit.sh --report` |
 | Run all security checks | `pre-commit run --all-files` |
 | Scan for secrets | `detect-secrets scan` |
 | Security lint code | `bandit -r src/ -ll` |
@@ -135,6 +137,16 @@ subprocess.call(cmd)  # nosec B602
 - [ ] No vulnerable dependencies
 - [ ] Authentication checks in place
 
+## Security Audit Reports
+
+```bash
+# Generate a full audit report (saved to timestamped folder)
+./scripts/run_security_audit.sh --report
+
+# Reports saved to: docs/security/audits/YYYY-MM-DD_HHMM/
+# Browse that directory for historical audit results
+```
+
 ## Monitoring Schedule
 
 | Frequency | Activity |
@@ -142,7 +154,7 @@ subprocess.call(cmd)  # nosec B602
 | Every commit | Pre-commit hooks |
 | Every PR | GitHub Actions |
 | Weekly | Dependency scan |
-| Monthly | Manual review |
+| Monthly | Manual review + `./scripts/run_security_audit.sh --report` |
 | Quarterly | Full audit |
 
 ## Documentation
