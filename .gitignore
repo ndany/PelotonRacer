@@ -39,3 +39,10 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+.hypothesis/
