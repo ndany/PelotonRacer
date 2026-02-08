@@ -379,12 +379,14 @@ def temp_data_dir(tmp_path):
 
 
 @pytest.fixture
-def data_manager_with_temp_dir(temp_data_dir):
+def data_manager_with_temp_dir(temp_data_dir, monkeypatch):
     """
     Provides a DataManager instance configured with a temporary directory.
+    Patches ALLOWED_BASE_DIR so the temp directory is within the allowed base.
 
     Args:
         temp_data_dir: Injected temporary directory fixture
+        monkeypatch: Built-in pytest fixture for safely modifying attributes
 
     Returns:
         DataManager: Configured with isolated temporary storage
@@ -395,11 +397,12 @@ def data_manager_with_temp_dir(temp_data_dir):
             manager.save_user_profile(user)
             loaded = manager.load_user_profile()
     """
+    monkeypatch.setattr(DataManager, 'ALLOWED_BASE_DIR', temp_data_dir.parent)
     return DataManager(str(temp_data_dir))
 
 
 @pytest.fixture
-def populated_data_dir(temp_data_dir, sample_user, sample_workouts, sample_followers):
+def populated_data_dir(temp_data_dir, sample_user, sample_workouts, sample_followers, monkeypatch):
     """
     Provides a temporary directory pre-populated with test data.
     Useful for testing data loading and analysis without setup code.
@@ -409,6 +412,7 @@ def populated_data_dir(temp_data_dir, sample_user, sample_workouts, sample_follo
         sample_user: Sample user fixture
         sample_workouts: Sample workouts fixture
         sample_followers: Sample followers fixture
+        monkeypatch: Built-in pytest fixture for safely modifying attributes
 
     Returns:
         tuple: (Path to data directory, DataManager instance)
@@ -419,6 +423,7 @@ def populated_data_dir(temp_data_dir, sample_user, sample_workouts, sample_follo
             user = manager.load_user_profile()
             workouts = manager.load_workouts()
     """
+    monkeypatch.setattr(DataManager, 'ALLOWED_BASE_DIR', temp_data_dir.parent)
     manager = DataManager(str(temp_data_dir))
 
     # Pre-populate with sample data
