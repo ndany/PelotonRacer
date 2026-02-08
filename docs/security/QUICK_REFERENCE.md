@@ -19,8 +19,6 @@ pre-commit install
 | Scan for secrets | `detect-secrets scan` |
 | Security lint code | `bandit -r src/ -ll` |
 | Check dependencies | `pip-audit` |
-| Format code | `black src/` |
-| Sort imports | `isort src/` |
 | Validate setup | `bash scripts/validate_security_setup.sh` |
 
 ## Pre-commit Hooks
@@ -60,12 +58,6 @@ bandit -r src/ -f json -o report.json  # JSON report
 pip-audit                # Check all dependencies
 pip-audit --desc         # With descriptions
 pip-audit --fix          # Auto-fix when possible
-```
-
-### safety
-```bash
-safety check             # Basic check
-safety check --json      # JSON output
 ```
 
 ## Common Security Issues & Fixes
@@ -168,7 +160,7 @@ subprocess.call(cmd)  # nosec B602
 
 | Issue | Solution |
 |-------|----------|
-| Pre-commit fails | Run `black .` and `isort .` |
+| Pre-commit fails | Review hook output and fix flagged issues |
 | False positive | Add inline comment or update baseline |
 | Hook not running | `pre-commit install` |
 | Tool not found | `pip install -r requirements-security.txt` |
@@ -186,10 +178,9 @@ subprocess.call(cmd)  # nosec B602
 - detect-secrets: ≥1.4.0
 - bandit: ≥1.7.5
 - pip-audit: ≥2.6.0
-- safety: ≥2.3.0
 
 ---
 
 **Print this page for quick reference!**
 
-Last updated: 2026-02-07
+Last updated: 2026-02-08

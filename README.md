@@ -118,37 +118,59 @@ Then expand "Advanced Login" in the Developer Tools section:
 
 ```
 PelotonRacer/
-├── app.py                       # Streamlit app entry point
-├── views/                       # Streamlit pages
-│   ├── main.py                  # Main race comparison page
-│   └── data_load_status.py      # Data loading statistics
-├── requirements.txt             # Python dependencies
-├── .env.example                 # Template for environment variables
-├── .gitignore
-├── README.md
-├── data/                        # Local JSON storage (git-ignored)
-│   ├── users/<user_id>/         # User-specific data
-│   │   ├── user_profile.json
-│   │   ├── workouts.json
-│   │   ├── followers.json
-│   │   ├── follower_workouts.json
-│   │   └── sync_metadata.json
-│   └── mock/                    # Mock data for testing
-└── src/
-    ├── config.py                # Centralized configuration
-    ├── api/
-    │   └── peloton_client.py    # Peloton API wrapper (reusable)
-    ├── auth/
-    │   └── peloton_auth.py      # OAuth PKCE authentication
-    ├── models/
-    │   └── models.py            # Data models (User, Workout, etc.)
-    ├── services/
-    │   ├── data_manager.py      # JSON file storage operations
-    │   └── race_analyzer.py     # Race comparison & analysis logic
-    └── utils/
-        ├── helpers.py           # Formatting utilities
-        ├── mock_data.py         # Test data generator
-        └── sidebar.py           # Shared sidebar component
+├── app.py                        # Streamlit app entry point
+├── views/                        # Streamlit pages
+│   ├── main.py                   # Main race comparison page
+│   └── data_load_status.py       # Data loading statistics
+├── src/                          # Application source code
+│   ├── config.py                 # Centralized configuration
+│   ├── api/
+│   │   └── peloton_client.py     # Peloton API wrapper (reusable)
+│   ├── auth/
+│   │   └── peloton_auth.py       # OAuth PKCE authentication
+│   ├── models/
+│   │   └── models.py             # Data models (User, Workout, etc.)
+│   ├── services/
+│   │   ├── data_manager.py       # JSON file storage operations
+│   │   └── race_analyzer.py      # Race comparison & analysis logic
+│   └── utils/
+│       ├── helpers.py            # Formatting utilities
+│       ├── mock_data.py          # Test data generator
+│       └── sidebar.py            # Shared sidebar component
+├── tests/                        # Test suite (307 tests)
+│   ├── conftest.py               # Shared fixtures
+│   ├── test_data_manager.py
+│   ├── test_models.py
+│   ├── test_peloton_auth.py
+│   ├── test_peloton_client.py
+│   ├── test_race_analyzer.py
+│   └── test_smoke.py
+├── scripts/                      # Automation scripts
+│   ├── run_security_audit.sh     # Security audit runner
+│   ├── generate_security_reports.py  # Analytical audit reports
+│   ├── validate_security_setup.sh    # Security tool validation
+│   └── generate_coverage_report.sh   # Test coverage reports
+├── docs/
+│   ├── security/                 # Security documentation & audits
+│   │   ├── README.md             # Security docs index
+│   │   ├── QUICK_REFERENCE.md    # One-page security tools reference
+│   │   ├── SECURITY_SETUP.md     # Security tool setup guide
+│   │   ├── SECURITY_PROCEDURES.md  # Incident response & procedures
+│   │   ├── SECURITY_SUMMARY.md   # Setup summary
+│   │   └── audits/               # Generated audit reports (gitignored)
+│   └── testing/                  # Testing documentation
+│       └── TESTING.md            # Testing guide
+├── data/                         # Local JSON storage (gitignored)
+├── requirements.txt              # Python dependencies
+├── requirements-security.txt     # Security tool dependencies
+├── pytest.ini                    # Test configuration & markers
+├── SECURITY.md                   # Security policy
+├── SECURITY_QUICKSTART.md        # Quick security setup guide
+├── .env.example                  # Template for environment variables
+├── .pre-commit-config.yaml       # Pre-commit hooks config
+├── .github/workflows/
+│   └── security-scan.yml         # CI security scanning
+└── CLAUDE.md                     # AI assistant guidance
 ```
 
 ## Configuration
@@ -193,7 +215,7 @@ followers = client.get_followers()
 
 ## Testing
 
-PelotonRacer includes a comprehensive test suite with 196 automated tests covering unit, integration, and security testing.
+PelotonRacer includes a comprehensive test suite with 307 automated tests covering unit, integration, and security testing.
 
 ### Run Tests
 
@@ -212,10 +234,11 @@ pytest tests/ -m "not slow" -v     # Skip slow tests
 
 ### Test Coverage
 
-- **Overall Coverage:** 98%
-- **Core Services:** 96-98% (Data Manager, Race Analyzer, Models)
-- **Authentication:** 100%, 99% (API Client, OAuth)
-- **Total Tests:** 301 (100% passing)
+- **Overall Coverage:** 97%
+- **Core Services:** 95-98% (Data Manager, Race Analyzer, Models)
+- **Authentication:** 99-100% (API Client, OAuth)
+- **Security Tests:** 42 security-marked tests
+- **Total Tests:** 307 (100% passing)
 
 ### Documentation
 
@@ -225,11 +248,14 @@ pytest tests/ -m "not slow" -v     # Skip slow tests
 
 ## Security
 
-⚠️ **Development Status:** This application is under active development and not yet production-ready.
+This project includes automated security monitoring with pre-commit hooks, CI/CD scanning, and a comprehensive security test suite.
 
-For security concerns or to report vulnerabilities, please contact the maintainers directly through GitHub issues or private communication channels.
+- **Security Policy:** [SECURITY.md](SECURITY.md)
+- **Quick Setup:** [SECURITY_QUICKSTART.md](SECURITY_QUICKSTART.md)
+- **Full Documentation:** [docs/security/README.md](docs/security/README.md)
+- **Run Audit:** `./scripts/run_security_audit.sh --report`
 
-**Note:** Do not deploy to public-facing production environments without proper security review.
+For security concerns or to report vulnerabilities, please use GitHub's private vulnerability reporting.
 
 ## Contributing
 
@@ -251,8 +277,4 @@ This project is not affiliated with, endorsed by, or connected to Peloton Intera
 
 ## Architecture
 
-The backend services are designed to be framework-agnostic and can be reused with other frontends (e.g., iOS app).
-
-## Note
-
-This is a prototype application. Data is stored locally in JSON format.
+The backend services in `src/` are framework-agnostic and can be reused with other frontends. Data is stored locally in JSON format.

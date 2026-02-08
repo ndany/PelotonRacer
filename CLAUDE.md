@@ -16,7 +16,18 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-There are no test or lint commands configured.
+## Testing
+
+```bash
+# Run all tests with coverage
+pytest tests/ -v --cov=src --cov-report=term-missing
+
+# Run only security-marked tests
+pytest tests/ -m security -v
+
+# Run security audit with report generation
+./scripts/run_security_audit.sh --report
+```
 
 ## Architecture
 
