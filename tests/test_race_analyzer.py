@@ -902,8 +902,8 @@ def test_create_time_series_dataframe_mismatched_array_lengths():
 
     # Should handle mismatched lengths gracefully
     assert len(df) == 5  # Should process all seconds_since_start entries
-    assert df.iloc[3]["Value"] is None  # Missing values should be None
-    assert df.iloc[4]["Value"] is None
+    assert pd.isna(df.iloc[3]["Value"])  # Missing values should be NaN
+    assert pd.isna(df.iloc[4]["Value"])
 
 
 @pytest.mark.unit

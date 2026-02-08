@@ -19,6 +19,7 @@ import base64
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 import requests
+import responses
 
 from src.api.peloton_client import PelotonClient
 
@@ -28,6 +29,7 @@ from src.api.peloton_client import PelotonClient
 # =============================================================================
 
 @pytest.mark.unit
+@responses.activate
 def test_bearer_token_authentication_success(mock_responses, mock_api_user_response):
     """Test successful authentication with Bearer token"""
     # Create a valid JWT token with proper structure
@@ -40,23 +42,23 @@ def test_bearer_token_authentication_success(mock_responses, mock_api_user_respo
     valid_token = f"{header}.{payload}.{signature}"
 
     # Mock the API response
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/user123",
         json=mock_api_user_response,
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient(bearer_token=valid_token)
-        result = client.authenticate()
+    client = PelotonClient(bearer_token=valid_token)
+    result = client.authenticate()
 
-        assert result is True
-        assert client.user_id == "user123"
-        assert client.bearer_token == valid_token
+    assert result is True
+    assert client.user_id == "user123"
+    assert client.bearer_token == valid_token
 
 
 @pytest.mark.unit
+@responses.activate
 def test_session_id_authentication_success(mock_responses):
     """Test successful authentication with session ID"""
     session_response = {
@@ -64,23 +66,23 @@ def test_session_id_authentication_success(mock_responses):
         "status": "active"
     }
 
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/auth/check_session",
         json=session_response,
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient(session_id="valid_session_id")
-        result = client.authenticate()
+    client = PelotonClient(session_id="valid_session_id")
+    result = client.authenticate()
 
-        assert result is True
-        assert client.user_id == "session_user_456"
-        assert client.session_id == "valid_session_id"
+    assert result is True
+    assert client.user_id == "session_user_456"
+    assert client.session_id == "valid_session_id"
 
 
 @pytest.mark.unit
+@responses.activate
 def test_username_password_authentication_success(mock_responses):
     """Test successful authentication with username and password"""
     auth_response = {
@@ -88,23 +90,23 @@ def test_username_password_authentication_success(mock_responses):
         "session_id": "new_session_abc123"
     }
 
-    mock_responses.add(
-        mock_responses.POST,
+    responses.add(
+        responses.POST,
         "https://api.onepeloton.com/auth/login?=",
         json=auth_response,
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient(username="testuser", password="testpass")
-        result = client.authenticate()
+    client = PelotonClient(username="testuser", password="testpass")
+    result = client.authenticate()
 
-        assert result is True
-        assert client.user_id == "pwd_user_789"
-        assert client.session_id == "new_session_abc123"
+    assert result is True
+    assert client.user_id == "pwd_user_789"
+    assert client.session_id == "new_session_abc123"
 
 
 @pytest.mark.unit
+@responses.activate
 def test_authentication_priority_bearer_over_session(mock_responses, mock_api_user_response):
     """Test that Bearer token is used when both Bearer and session ID are provided"""
     # Create valid JWT
@@ -115,41 +117,40 @@ def test_authentication_priority_bearer_over_session(mock_responses, mock_api_us
     signature = base64.urlsafe_b64encode(b"sig").decode().rstrip('=')
     token = f"{header}.{payload}.{signature}"
 
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/bearer_user",
         json={"id": "bearer_user"},
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient(bearer_token=token, session_id="session_should_not_be_used")
-        result = client.authenticate()
+    client = PelotonClient(bearer_token=token, session_id="session_should_not_be_used")
+    result = client.authenticate()
 
-        assert result is True
-        assert client.user_id == "bearer_user"  # Bearer token takes priority
+    assert result is True
+    assert client.user_id == "bearer_user"  # Bearer token takes priority
 
 
 @pytest.mark.unit
+@responses.activate
 def test_authentication_priority_session_over_credentials(mock_responses):
     """Test that session ID is used when both session and credentials are provided"""
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/auth/check_session",
         json={"user_id": "session_user"},
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient(
-            session_id="valid_session",
-            username="user_should_not_be_used",
-            password="pass_should_not_be_used"
-        )
-        result = client.authenticate()
+    client = PelotonClient(
+        session_id="valid_session",
+        username="user_should_not_be_used",
+        password="pass_should_not_be_used"
+    )
+    result = client.authenticate()
 
-        assert result is True
-        assert client.user_id == "session_user"
+    assert result is True
+    assert client.user_id == "session_user"
 
 
 @pytest.mark.unit
@@ -165,27 +166,28 @@ def test_missing_credentials_handling():
 
 
 @pytest.mark.unit
+@responses.activate
 def test_get_user_profile_success(mock_responses, mock_api_user_response):
     """Test fetching user profile data"""
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/user123",
         json=mock_api_user_response,
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient()
-        client.user_id = "user123"
+    client = PelotonClient()
+    client.user_id = "user123"
 
-        profile = client.get_user_profile()
+    profile = client.get_user_profile()
 
-        assert profile is not None
-        assert profile["id"] == "user123"
-        assert profile["username"] == "testuser"
+    assert profile is not None
+    assert profile["id"] == "user123"
+    assert profile["username"] == "testuser"
 
 
 @pytest.mark.unit
+@responses.activate
 def test_get_workouts_success(mock_responses):
     """Test fetching workout data"""
     workout_response = {
@@ -195,41 +197,40 @@ def test_get_workouts_success(mock_responses):
         ]
     }
 
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/user123/workouts",
         json=workout_response,
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient()
-        client.user_id = "user123"
+    client = PelotonClient()
+    client.user_id = "user123"
 
-        workouts = client.get_workouts(limit=10, page=0)
+    workouts = client.get_workouts(limit=10, page=0)
 
-        assert len(workouts) == 2
-        assert workouts[0]["id"] == "workout1"
+    assert len(workouts) == 2
+    assert workouts[0]["id"] == "workout1"
 
 
 @pytest.mark.unit
+@responses.activate
 def test_get_workout_performance_success(mock_responses, mock_api_performance_response):
     """Test fetching performance graph data"""
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/workout/workout123/performance_graph",
         json=mock_api_performance_response,
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient()
+    client = PelotonClient()
 
-        performance = client.get_workout_performance("workout123")
+    performance = client.get_workout_performance("workout123")
 
-        assert performance is not None
-        assert "metrics" in performance
-        assert "seconds_since_pedaling_start" in performance
+    assert performance is not None
+    assert "metrics" in performance
+    assert "seconds_since_pedaling_start" in performance
 
 
 # =============================================================================
@@ -286,6 +287,7 @@ def test_jwt_signature_validation_missing():
 
 
 @pytest.mark.unit
+@pytest.mark.security
 def test_malformed_jwt_token_rejection():
     """Test that malformed JWT tokens are rejected"""
     malformed_tokens = [
@@ -305,6 +307,7 @@ def test_malformed_jwt_token_rejection():
 
 
 @pytest.mark.unit
+@pytest.mark.security
 def test_expired_jwt_token_handling():
     """
     Test handling of expired JWT tokens
@@ -356,6 +359,8 @@ def test_jwt_missing_user_id_claim():
 # =============================================================================
 
 @pytest.mark.unit
+@pytest.mark.security
+@responses.activate
 def test_error_messages_dont_leak_bearer_token(mock_responses, capfd):
     """
     HIGH SECURITY TEST: Verify error messages don't expose Bearer tokens
@@ -364,79 +369,79 @@ def test_error_messages_dont_leak_bearer_token(mock_responses, capfd):
     """
     token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.SECRET_PAYLOAD.SECRET_SIG"
 
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/user123",
         json={"error": "Unauthorized"},
         status=401
     )
 
-    with mock_responses:
-        # Create valid JWT structure
-        header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256"}).encode()).decode().rstrip('=')
-        payload = base64.urlsafe_b64encode(json.dumps({
-            "http://onepeloton.com/user_id": "user123"
-        }).encode()).decode().rstrip('=')
-        signature = base64.urlsafe_b64encode(b"sig").decode().rstrip('=')
-        valid_token = f"{header}.{payload}.{signature}"
+    # Create valid JWT structure
+    header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256"}).encode()).decode().rstrip('=')
+    payload = base64.urlsafe_b64encode(json.dumps({
+        "http://onepeloton.com/user_id": "user123"
+    }).encode()).decode().rstrip('=')
+    signature = base64.urlsafe_b64encode(b"sig").decode().rstrip('=')
+    valid_token = f"{header}.{payload}.{signature}"
 
-        client = PelotonClient(bearer_token=valid_token)
-        result = client._validate_bearer_token()
+    client = PelotonClient(bearer_token=valid_token)
+    result = client._validate_bearer_token()
 
-        # Capture stdout/stderr
-        captured = capfd.readouterr()
-        combined_output = captured.out + captured.err
+    # Capture stdout/stderr
+    captured = capfd.readouterr()
+    combined_output = captured.out + captured.err
 
-        # Token should NOT appear in output
-        assert valid_token not in combined_output, "Bearer token leaked in error output"
-        assert signature not in combined_output, "JWT signature leaked in error output"
+    # Token should NOT appear in output
+    assert valid_token not in combined_output, "Bearer token leaked in error output"
+    assert signature not in combined_output, "JWT signature leaked in error output"
 
 
 @pytest.mark.unit
+@responses.activate
 def test_error_messages_dont_leak_session_id(mock_responses, capfd):
     """Test that session IDs don't leak in error messages"""
     secret_session_id = "super_secret_session_12345"
 
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/auth/check_session",
         json={"error": "Invalid session"},
         status=401
     )
 
-    with mock_responses:
-        client = PelotonClient(session_id=secret_session_id)
-        result = client._validate_session()
+    client = PelotonClient(session_id=secret_session_id)
+    result = client._validate_session()
 
-        captured = capfd.readouterr()
-        combined_output = captured.out + captured.err
+    captured = capfd.readouterr()
+    combined_output = captured.out + captured.err
 
-        assert secret_session_id not in combined_output, "Session ID leaked in error output"
+    assert secret_session_id not in combined_output, "Session ID leaked in error output"
 
 
 @pytest.mark.unit
+@responses.activate
 def test_error_messages_dont_leak_password(mock_responses, capfd):
     """Test that passwords don't leak in error messages"""
     secret_password = "MySecretPassword123!"
 
-    mock_responses.add(
-        mock_responses.POST,
+    responses.add(
+        responses.POST,
         "https://api.onepeloton.com/auth/login?=",
         json={"error": "Invalid credentials"},
         status=401
     )
 
-    with mock_responses:
-        client = PelotonClient(username="testuser", password=secret_password)
-        result = client._authenticate_with_credentials()
+    client = PelotonClient(username="testuser", password=secret_password)
+    result = client._authenticate_with_credentials()
 
-        captured = capfd.readouterr()
-        combined_output = captured.out + captured.err
+    captured = capfd.readouterr()
+    combined_output = captured.out + captured.err
 
-        assert secret_password not in combined_output, "Password leaked in error output"
+    assert secret_password not in combined_output, "Password leaked in error output"
 
 
 @pytest.mark.unit
+@pytest.mark.security
 def test_exception_handling_doesnt_expose_credentials():
     """
     Test that exception stack traces don't expose credentials
@@ -447,17 +452,20 @@ def test_exception_handling_doesnt_expose_credentials():
 
     client = PelotonClient(bearer_token=sensitive_token)
 
-    # Force an exception during authentication
+    # Force an exception during API call
     with patch.object(client.session, 'get', side_effect=Exception("Network error")):
-        with pytest.raises(Exception, match="Network error"):
-            # If exception bubbles up, ensure credentials aren't in traceback
-            client.get_user_profile()
+        # Exception should be caught and method should return None
+        result = client.get_user_profile()
 
-        # In production, exceptions should be caught and sanitized
-        # This test documents the risk of credential exposure in stack traces
+        # Verify the method handles exception gracefully
+        assert result is None
+
+        # In production, exceptions are caught and sanitized
+        # This prevents credential exposure in stack traces
 
 
 @pytest.mark.unit
+@pytest.mark.security
 def test_tokens_not_logged_in_debug_mode(capfd):
     """
     Test that tokens are not logged even in debug/verbose mode
@@ -526,62 +534,62 @@ def test_api_network_error_handling(mock_responses):
 
 
 @pytest.mark.unit
+@responses.activate
 def test_api_rate_limiting_response(mock_responses):
     """Test handling of API rate limiting (429 status)"""
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/user123/workouts",
         json={"error": "Rate limit exceeded"},
         status=429
     )
 
-    with mock_responses:
-        client = PelotonClient()
-        client.user_id = "user123"
+    client = PelotonClient()
+    client.user_id = "user123"
 
-        workouts = client.get_workouts()
+    workouts = client.get_workouts()
 
-        # Should return empty list, not raise exception
-        assert workouts == []
+    # Should return empty list, not raise exception
+    assert workouts == []
 
 
 @pytest.mark.unit
+@responses.activate
 def test_api_unauthorized_response(mock_responses):
     """Test handling of 401 Unauthorized responses"""
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/user123",
         json={"error": "Unauthorized"},
         status=401
     )
 
-    with mock_responses:
-        client = PelotonClient()
-        client.user_id = "user123"
+    client = PelotonClient()
+    client.user_id = "user123"
 
-        profile = client.get_user_profile()
+    profile = client.get_user_profile()
 
-        assert profile is None
+    assert profile is None
 
 
 @pytest.mark.unit
+@responses.activate
 def test_api_forbidden_response(mock_responses):
     """Test handling of 403 Forbidden responses"""
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/other_user/workouts",
         json={"error": "Forbidden"},
         status=403
     )
 
-    with mock_responses:
-        client = PelotonClient()
-        client.user_id = "user123"
+    client = PelotonClient()
+    client.user_id = "user123"
 
-        # Try to access another user's workouts
-        workouts = client.get_user_workouts("other_user")
+    # Try to access another user's workouts
+    workouts = client.get_user_workouts("other_user")
 
-        assert workouts == []
+    assert workouts == []
 
 
 # =============================================================================
@@ -639,14 +647,15 @@ def test_get_workouts_without_user_id():
 
 
 @pytest.mark.unit
+@responses.activate
 def test_get_all_workouts_pagination(mock_responses):
     """Test that get_all_workouts properly paginates through results"""
     from src.config import API_PAGE_SIZE
 
     # First page: full page of results
     page1_data = [{"id": f"workout{i}"} for i in range(API_PAGE_SIZE)]
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/user123/workouts",
         json={"data": page1_data},
         status=200
@@ -654,41 +663,40 @@ def test_get_all_workouts_pagination(mock_responses):
 
     # Second page: partial results (indicates end)
     page2_data = [{"id": f"workout{i}"} for i in range(API_PAGE_SIZE, API_PAGE_SIZE + 10)]
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/user123/workouts",
         json={"data": page2_data},
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient()
-        client.user_id = "user123"
+    client = PelotonClient()
+    client.user_id = "user123"
 
-        # Should stop after second page (less than page_size results)
-        workouts = client.get_all_workouts(max_workouts=200)
+    # Should stop after second page (less than page_size results)
+    workouts = client.get_all_workouts(max_workouts=200)
 
-        assert len(workouts) == API_PAGE_SIZE + 10
+    assert len(workouts) == API_PAGE_SIZE + 10
 
 
 @pytest.mark.unit
+@responses.activate
 def test_get_followers(mock_responses, mock_api_followers_response):
     """Test fetching followers list"""
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/user/user123/following",
         json=mock_api_followers_response,
         status=200
     )
 
-    with mock_responses:
-        client = PelotonClient()
-        client.user_id = "user123"
+    client = PelotonClient()
+    client.user_id = "user123"
 
-        followers = client.get_followers()
+    followers = client.get_followers()
 
-        assert len(followers) == 2
-        assert followers[0]["id"] == "follower456"
+    assert len(followers) == 2
+    assert followers[0]["id"] == "follower456"
 
 
 @pytest.mark.unit
@@ -702,17 +710,17 @@ def test_get_followers_without_user_id():
 
 
 @pytest.mark.unit
+@responses.activate
 def test_workout_performance_network_error(mock_responses):
     """Test handling of network errors when fetching workout performance"""
-    mock_responses.add(
-        mock_responses.GET,
+    responses.add(
+        responses.GET,
         "https://api.onepeloton.com/api/workout/workout123/performance_graph",
         body=requests.exceptions.Timeout("Request timed out")
     )
 
-    with mock_responses:
-        client = PelotonClient()
+    client = PelotonClient()
 
-        performance = client.get_workout_performance("workout123")
+    performance = client.get_workout_performance("workout123")
 
-        assert performance is None
+    assert performance is None

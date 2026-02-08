@@ -46,3 +46,21 @@ htmlcov/
 .coverage
 *.cover
 .hypothesis/
+
+# Security
+.secrets.baseline
+security-reports/
+bandit-report.json
+
+# Generated test reports (regenerate with: pytest --cov)
+docs/testing/coverage-report.md
+
+# Generated security audit reports (contain vulnerability details + regenerable)
+docs/security/audit-*.md
+docs/security/vulnerabilities.md
+docs/security/remediation-roadmap.md
+docs/security/SECURITY_SUMMARY.md
+
+# Agent work summaries (temporary metadata)
+docs/**/ISSUE-*-SUMMARY.md
+docs/**/*-SUMMARY.md
