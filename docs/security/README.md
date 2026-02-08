@@ -185,13 +185,41 @@ Help improve PelotonRacer security:
 4. **Update Docs**: Keep security docs current
 5. **Share Knowledge**: Help teammates learn security
 
+## Running a Security Audit
+
+```bash
+# Quick test run (security-marked tests only)
+./scripts/run_security_audit.sh
+
+# Full audit with report generation (saved to timestamped folder)
+./scripts/run_security_audit.sh --report
+```
+
+Reports are saved to `docs/security/audits/YYYY-MM-DD_HHMM/` with results from
+pytest security tests, bandit static analysis, dependency audits, and secrets scanning.
+Browse `docs/security/audits/` for historical audit results.
+
 ## File Structure
 
 ```
 docs/security/
 ├── README.md                    # This file - overview and index
+├── QUICK_REFERENCE.md          # One-page security tools reference
 ├── SECURITY_SETUP.md           # Setup guide for security tools
-└── SECURITY_PROCEDURES.md      # Operational security procedures
+├── SECURITY_PROCEDURES.md      # Operational security procedures
+└── audits/                     # Generated audit reports (gitignored)
+    └── YYYY-MM-DD_HHMM/        # Timestamped audit folders
+        ├── audit-summary.md
+        ├── pytest-security-results.txt
+        ├── bandit-results.txt
+        ├── bandit-results.json
+        ├── dependency-audit.txt
+        └── secrets-scan.json
+
+scripts/
+├── run_security_audit.sh       # Security audit runner
+├── validate_security_setup.sh  # Validates tool installation
+└── generate_coverage_report.sh # Test coverage report
 
 .github/workflows/
 └── security-scan.yml           # Automated security scanning
