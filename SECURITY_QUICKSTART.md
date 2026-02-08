@@ -12,8 +12,7 @@ This installs:
 - Pre-commit hooks framework
 - Secrets detection (detect-secrets)
 - Security linting (bandit)
-- Dependency scanning (pip-audit, safety)
-- Code formatting tools (black, isort, flake8)
+- Dependency scanning (pip-audit)
 
 ## 2. Set Up Pre-commit Hooks
 

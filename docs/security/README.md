@@ -68,8 +68,6 @@ pip-audit
 | **detect-secrets** | Prevents credential commits | Every commit (pre-commit) |
 | **bandit** | Python security linting | Every commit (pre-commit) |
 | **pip-audit** | Dependency vulnerabilities | Weekly (GitHub Actions) |
-| **safety** | Alternative dependency check | Weekly (GitHub Actions) |
-| **flake8** | Code quality | Every commit (pre-commit) |
 
 ### GitHub Actions
 
@@ -207,9 +205,12 @@ docs/security/
 ├── QUICK_REFERENCE.md          # One-page security tools reference
 ├── SECURITY_SETUP.md           # Setup guide for security tools
 ├── SECURITY_PROCEDURES.md      # Operational security procedures
+├── SECURITY_SUMMARY.md         # Security monitoring setup summary
 └── audits/                     # Generated audit reports (gitignored)
     └── YYYY-MM-DD_HHMM/        # Timestamped audit folders
-        ├── audit-summary.md
+        ├── audit-report.md
+        ├── vulnerabilities.md
+        ├── remediation-roadmap.md
         ├── pytest-security-results.txt
         ├── bandit-results.txt
         ├── bandit-results.json
@@ -217,9 +218,10 @@ docs/security/
         └── secrets-scan.json
 
 scripts/
-├── run_security_audit.sh       # Security audit runner
-├── validate_security_setup.sh  # Validates tool installation
-└── generate_coverage_report.sh # Test coverage report
+├── run_security_audit.sh        # Security audit runner
+├── generate_security_reports.py # Generates analytical audit reports
+├── validate_security_setup.sh   # Validates tool installation
+└── generate_coverage_report.sh  # Test coverage report
 
 .github/workflows/
 └── security-scan.yml           # Automated security scanning
@@ -236,6 +238,7 @@ Root directory:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-02-07 | Initial security monitoring setup |
+| 1.1 | 2026-02-08 | Added report generation, updated tool references |
 
 ---
 

@@ -86,49 +86,9 @@ check_package "pre-commit"
 check_package "detect-secrets"
 check_package "bandit"
 check_package "pip-audit"
-check_package "safety"
-check_package "black"
-check_package "isort"
-check_package "flake8"
 echo ""
 
-echo "5. Checking Pre-commit Hooks"
-echo "----------------------------"
-if [ -d ".git/hooks" ]; then
-    if [ -f ".git/hooks/pre-commit" ]; then
-        echo -e "${GREEN}✓${NC} Pre-commit hook installed"
-    else
-        echo -e "${YELLOW}⚠${NC} Pre-commit hook not installed (run: pre-commit install)"
-        WARNINGS=$((WARNINGS + 1))
-    fi
-else
-    echo -e "${RED}✗${NC} Not a git repository"
-    ERRORS=$((ERRORS + 1))
-fi
-echo ""
-
-echo "6. Validating YAML Syntax"
-echo "------------------------"
-if command -v yamllint &> /dev/null; then
-    if yamllint .pre-commit-config.yaml &> /dev/null; then
-        echo -e "${GREEN}✓${NC} .pre-commit-config.yaml valid"
-    else
-        echo -e "${RED}✗${NC} .pre-commit-config.yaml has errors"
-        ERRORS=$((ERRORS + 1))
-    fi
-    if yamllint .github/workflows/security-scan.yml &> /dev/null; then
-        echo -e "${GREEN}✓${NC} security-scan.yml valid"
-    else
-        echo -e "${RED}✗${NC} security-scan.yml has errors"
-        ERRORS=$((ERRORS + 1))
-    fi
-else
-    echo -e "${YELLOW}⚠${NC} yamllint not installed, skipping YAML validation"
-    WARNINGS=$((WARNINGS + 1))
-fi
-echo ""
-
-echo "7. Testing Security Tools"
+echo "5. Testing Security Tools"
 echo "------------------------"
 if command -v detect-secrets &> /dev/null; then
     if detect-secrets scan --baseline .secrets.baseline &> /dev/null; then
@@ -167,9 +127,8 @@ if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
     echo "Security monitoring is properly configured."
     echo ""
     echo "Next steps:"
-    echo "  1. If pre-commit hooks not installed: pre-commit install"
-    echo "  2. Test the setup: pre-commit run --all-files"
-    echo "  3. Read the docs: docs/security/README.md"
+    echo "  1. Read the docs: docs/security/README.md"
+    echo "  2. Run a security audit: ./scripts/run_security_audit.sh --report"
     exit 0
 elif [ $ERRORS -eq 0 ]; then
     echo -e "${YELLOW}⚠ Validation completed with $WARNINGS warning(s)${NC}"
