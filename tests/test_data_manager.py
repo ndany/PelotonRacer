@@ -526,40 +526,34 @@ def test_load_follower_workouts_filters_invalid_rides(data_manager_with_temp_dir
 
 @pytest.mark.unit
 @pytest.mark.security
-def test_set_data_dir_with_path_traversal_attack(temp_data_dir):
-    """SECURITY: Test that path traversal attempts are NOT prevented (vulnerability exists)"""
-    # This test demonstrates the VULNERABILITY - set_data_dir accepts arbitrary paths
-    manager = DataManager(str(temp_data_dir))
+def test_set_data_dir_with_path_traversal_attack():
+    """SECURITY: Test that path traversal attempts are rejected by set_data_dir"""
+    # The fix validates that paths are within ALLOWED_BASE_DIR.
+    # Paths clearly outside the project (like /etc/passwd) should raise ValueError.
+    with pytest.raises(ValueError):
+        manager = DataManager("/etc/passwd")
 
-    # Attempt path traversal attack
-    traversal_path = str(temp_data_dir / ".." / ".." / "etc" / "passwd")
-
-    # VULNERABILITY: This should be blocked but currently is NOT
-    # The method accepts the path without validation
-    manager.set_data_dir(traversal_path)
-
-    # Verify the manager accepted the dangerous path
-    # This demonstrates the security issue
-    assert str(manager.data_dir) == traversal_path
+    with pytest.raises(ValueError):
+        manager = DataManager("/tmp/safe_dir")
+        manager.set_data_dir("/etc/shadow")
 
 
 @pytest.mark.unit
 @pytest.mark.security
-def test_path_traversal_in_initialization(temp_data_dir):
-    """SECURITY: Test path traversal in DataManager initialization"""
-    # Create a path outside the intended data directory
-    outside_path = temp_data_dir.parent.parent / "malicious_data"
+def test_path_traversal_in_initialization():
+    """SECURITY: Test path traversal in DataManager initialization is rejected"""
+    # Initializing with a path outside the project directory should raise ValueError
+    with pytest.raises(ValueError):
+        DataManager("/var/log/malicious_data")
 
-    # VULNERABILITY: DataManager accepts this without validation
-    manager = DataManager(str(outside_path))
-
-    # The malicious path is accepted
-    assert manager.data_dir == outside_path
+    with pytest.raises(ValueError):
+        DataManager("/tmp/outside_project/data")
 
 
 @pytest.mark.unit
-def test_file_operations_follow_set_data_dir(temp_data_dir, sample_user):
+def test_file_operations_follow_set_data_dir(temp_data_dir, sample_user, monkeypatch):
     """Test that file operations use the configured data_dir"""
+    monkeypatch.setattr(DataManager, 'ALLOWED_BASE_DIR', temp_data_dir.parent)
     manager = DataManager(str(temp_data_dir))
 
     # Save data
@@ -575,8 +569,9 @@ def test_file_operations_follow_set_data_dir(temp_data_dir, sample_user):
 
 @pytest.mark.unit
 @pytest.mark.security
-def test_symbolic_link_handling(temp_data_dir, sample_user):
+def test_symbolic_link_handling(temp_data_dir, sample_user, monkeypatch):
     """SECURITY: Test handling of symbolic links (potential vulnerability)"""
+    monkeypatch.setattr(DataManager, 'ALLOWED_BASE_DIR', temp_data_dir.parent)
     manager = DataManager(str(temp_data_dir))
 
     # Create a symbolic link to a file outside the data directory
@@ -730,8 +725,9 @@ def test_file_permissions_on_created_files(data_manager_with_temp_dir, sample_us
 
 
 @pytest.mark.unit
-def test_directory_creation_with_parents(temp_data_dir):
+def test_directory_creation_with_parents(temp_data_dir, monkeypatch):
     """Test that set_data_dir creates parent directories"""
+    monkeypatch.setattr(DataManager, 'ALLOWED_BASE_DIR', temp_data_dir.parent)
     nested_path = temp_data_dir / "level1" / "level2" / "level3"
 
     manager = DataManager(str(nested_path))
@@ -888,11 +884,12 @@ def test_clear_all_data_when_no_files_exist(data_manager_with_temp_dir):
 
 @pytest.mark.unit
 @pytest.mark.security
-def test_path_traversal_with_relative_paths(temp_data_dir):
-    """SECURITY: Test path traversal with various relative path patterns"""
+def test_path_traversal_with_relative_paths(temp_data_dir, monkeypatch):
+    """SECURITY: Test that path traversal with relative paths is rejected"""
+    monkeypatch.setattr(DataManager, 'ALLOWED_BASE_DIR', temp_data_dir.parent)
     manager = DataManager(str(temp_data_dir))
 
-    # Test various path traversal patterns
+    # Test various path traversal patterns - all should raise ValueError
     patterns = [
         "../../../etc/passwd",
         "../../sensitive",
@@ -903,11 +900,9 @@ def test_path_traversal_with_relative_paths(temp_data_dir):
     for pattern in patterns:
         traversal_path = str(temp_data_dir / pattern)
 
-        # VULNERABILITY: These paths are accepted without validation
-        manager.set_data_dir(traversal_path)
-
-        # The path is normalized by pathlib but still points outside intended directory
-        # This demonstrates the security issue
+        # The fix now validates paths and rejects traversal attempts
+        with pytest.raises(ValueError):
+            manager.set_data_dir(traversal_path)
 
 
 @pytest.mark.unit
@@ -980,3 +975,34 @@ def test_empty_follower_workouts_save_and_load(data_manager_with_temp_dir):
     # Load should return empty dict
     loaded = manager.load_follower_workouts(valid_only=False)
     assert loaded == {}
+
+@pytest.mark.unit
+@pytest.mark.security
+def test_set_data_dir_allows_valid_subdirectories(temp_data_dir, monkeypatch):
+    """Test that valid subdirectories within the project are allowed"""
+    monkeypatch.setattr(DataManager, 'ALLOWED_BASE_DIR', temp_data_dir.parent)
+    manager = DataManager(str(temp_data_dir))
+    # Setting to a valid subdirectory should work
+    valid_subdir = str(temp_data_dir / "subdir" / "nested")
+    manager.set_data_dir(valid_subdir)
+    assert manager.data_dir == Path(valid_subdir)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+def test_get_user_data_dir_rejects_traversal():
+    """Test that user_id with path traversal characters is rejected"""
+    with pytest.raises(ValueError):
+        DataManager.get_user_data_dir("../../../etc/passwd")
+    with pytest.raises(ValueError):
+        DataManager.get_user_data_dir("user/../../etc")
+    with pytest.raises(ValueError):
+        DataManager.get_user_data_dir("..\\windows\\system32")
+
+
+@pytest.mark.unit
+@pytest.mark.security
+def test_get_user_data_dir_allows_valid_ids():
+    """Test that valid user IDs are accepted"""
+    result = DataManager.get_user_data_dir("abc123def456")
+    assert result == "data/users/abc123def456"

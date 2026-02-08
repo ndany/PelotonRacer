@@ -5,6 +5,7 @@ Handles authentication and data retrieval from Peloton API
 
 import requests
 import json
+import jwt
 from typing import Dict, List, Optional
 from datetime import datetime
 
@@ -79,44 +80,47 @@ class PelotonClient:
     def _validate_bearer_token(self) -> bool:
         """Validate bearer token by decoding JWT and verifying with API"""
         try:
-            import base64
-            import json
-            
-            # Decode the JWT payload to get user_id (JWT is base64 encoded)
-            # JWT format: header.payload.signature
-            parts = self.bearer_token.split('.')
-            if len(parts) != 3:
-                print("Invalid JWT format")
-                return False
-            
-            # Decode payload (add padding if needed)
-            payload = parts[1]
-            padding = 4 - len(payload) % 4
-            if padding != 4:
-                payload += '=' * padding
-            
-            decoded = base64.urlsafe_b64decode(payload)
-            claims = json.loads(decoded)
-            
+            # Decode JWT using PyJWT with expiration checking
+            # We cannot verify the signature since we don't have Peloton's signing key,
+            # but we validate token structure, required claims, and expiration
+            claims = jwt.decode(
+                self.bearer_token,
+                algorithms=["HS256", "RS256"],
+                options={
+                    "verify_signature": False,
+                    "verify_exp": True,
+                    "require": ["exp", "http://onepeloton.com/user_id"]
+                }
+            )
+
             # Extract user_id from claims
             self.user_id = claims.get("http://onepeloton.com/user_id")
             if not self.user_id:
                 print("No user_id in JWT claims")
                 return False
-            
+
             # Verify the token works by fetching user profile
             endpoint = f"{self.BASE_URL}/api/user/{self.user_id}"
             response = self.session.get(endpoint)
             response.raise_for_status()
-            
+
             data = response.json()
             # If we get valid user data, auth is successful
             if data.get("id") == self.user_id:
                 return True
-            
+
             return False
-        except Exception as e:
-            print(f"Bearer token validation failed: {e}")
+        except jwt.ExpiredSignatureError:
+            print("Bearer token has expired")
+            return False
+        except jwt.DecodeError:
+            print("Bearer token is malformed")
+            return False
+        except jwt.InvalidTokenError:
+            print("Bearer token is invalid")
+            return False
+        except Exception:
+            print("Bearer token validation failed")
             return False
     
     def _validate_session(self) -> bool:
@@ -132,8 +136,8 @@ class PelotonClient:
             if self.user_id:
                 return True
             return False
-        except Exception as e:
-            print(f"Session validation failed: {e}")
+        except Exception:
+            print("Session validation failed")
             return False
     
     def _authenticate_with_credentials(self) -> bool:
@@ -157,8 +161,8 @@ class PelotonClient:
             self.session.cookies.set("peloton_session_id", self.session_id)
             
             return True
-        except Exception as e:
-            print(f"Authentication failed: {e}")
+        except Exception:
+            print("Authentication failed")
             return False
     
     def get_user_profile(self) -> Optional[Dict]:
