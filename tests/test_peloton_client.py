@@ -724,3 +724,283 @@ def test_workout_performance_network_error(mock_responses):
     performance = client.get_workout_performance("workout123")
 
     assert performance is None
+
+
+# =============================================================================
+# BRANCH COVERAGE TESTS - Target specific uncovered branches
+# =============================================================================
+
+@pytest.mark.unit
+@responses.activate
+def test_bearer_token_validation_api_mismatch(mock_responses):
+    """Test bearer token validation when API returns mismatched user_id"""
+    header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256"}).encode()).decode().rstrip('=')
+    payload = base64.urlsafe_b64encode(json.dumps({
+        "http://onepeloton.com/user_id": "user123"
+    }).encode()).decode().rstrip('=')
+    signature = base64.urlsafe_b64encode(b"sig").decode().rstrip('=')
+    token = f"{header}.{payload}.{signature}"
+
+    # API returns different user_id than token claims
+    responses.add(
+        responses.GET,
+        "https://api.onepeloton.com/api/user/user123",
+        json={"id": "different_user"},  # Mismatch!
+        status=200
+    )
+
+    client = PelotonClient(bearer_token=token)
+    result = client._validate_bearer_token()
+
+    # Should return False when user_id doesn't match
+    assert result is False
+
+
+@pytest.mark.unit
+@responses.activate
+def test_session_validation_no_user_id(mock_responses):
+    """Test session validation when API returns no user_id"""
+    responses.add(
+        responses.GET,
+        "https://api.onepeloton.com/auth/check_session",
+        json={"status": "active"},  # No user_id field
+        status=200
+    )
+
+    client = PelotonClient(session_id="test_session")
+    result = client._validate_session()
+
+    # Should return False when no user_id in response
+    assert result is False
+    assert client.user_id is None
+
+
+@pytest.mark.unit
+def test_get_all_workouts_empty_first_page():
+    """Test get_all_workouts when first page returns no results"""
+    client = PelotonClient()
+    client.user_id = "user123"
+
+    with patch.object(client, 'get_workouts', return_value=[]):
+        workouts = client.get_all_workouts(max_workouts=100)
+
+    # Should return empty list immediately
+    assert workouts == []
+
+
+@pytest.mark.unit
+@responses.activate
+def test_get_all_workouts_uses_default_max(mock_responses):
+    """Test get_all_workouts uses MAX_USER_WORKOUTS_FULL when max_workouts=None"""
+    from src.config import API_PAGE_SIZE, MAX_USER_WORKOUTS_FULL
+
+    # Return exactly one page to avoid infinite loop
+    page_data = [{"id": f"workout{i}"} for i in range(10)]
+    responses.add(
+        responses.GET,
+        "https://api.onepeloton.com/api/user/user123/workouts",
+        json={"data": page_data},
+        status=200
+    )
+
+    client = PelotonClient()
+    client.user_id = "user123"
+
+    # Call without max_workouts parameter
+    workouts = client.get_all_workouts()
+
+    # Should not raise error and should use default
+    assert len(workouts) == 10
+
+
+@pytest.mark.unit
+@responses.activate
+def test_get_all_workouts_stops_at_max_workouts(mock_responses):
+    """Test that get_all_workouts respects max_workouts limit"""
+    from src.config import API_PAGE_SIZE
+
+    # Return multiple full pages
+    for i in range(3):
+        page_data = [{"id": f"workout{i*API_PAGE_SIZE + j}"} for j in range(API_PAGE_SIZE)]
+        responses.add(
+            responses.GET,
+            "https://api.onepeloton.com/api/user/user123/workouts",
+            json={"data": page_data},
+            status=200
+        )
+
+    client = PelotonClient()
+    client.user_id = "user123"
+
+    # Request only 150 workouts even though more are available
+    workouts = client.get_all_workouts(max_workouts=150)
+
+    # Should return exactly 150 (trimmed from 200+)
+    assert len(workouts) == 150
+
+
+@pytest.mark.unit
+@responses.activate
+def test_get_followers_error_handling(mock_responses):
+    """Test get_followers handles API errors gracefully"""
+    responses.add(
+        responses.GET,
+        "https://api.onepeloton.com/api/user/user123/following",
+        json={"error": "Server error"},
+        status=500
+    )
+
+    client = PelotonClient()
+    client.user_id = "user123"
+
+    followers = client.get_followers()
+
+    # Should return empty list on error
+    assert followers == []
+
+
+@pytest.mark.unit
+@responses.activate
+def test_get_workouts_with_fitness_discipline(mock_responses):
+    """Test get_workouts with fitness_discipline parameter"""
+    workout_response = {
+        "data": [
+            {"id": "workout1", "fitness_discipline": "strength"},
+            {"id": "workout2", "fitness_discipline": "strength"}
+        ]
+    }
+
+    responses.add(
+        responses.GET,
+        "https://api.onepeloton.com/api/user/user123/workouts",
+        json=workout_response,
+        status=200
+    )
+
+    client = PelotonClient()
+    client.user_id = "user123"
+
+    # Call with fitness_discipline parameter
+    workouts = client.get_workouts(limit=10, page=0, fitness_discipline="strength")
+
+    assert len(workouts) == 2
+    assert all(w["fitness_discipline"] == "strength" for w in workouts)
+
+
+@pytest.mark.unit
+@responses.activate
+def test_get_user_workouts_with_fitness_discipline(mock_responses):
+    """Test get_user_workouts with fitness_discipline parameter"""
+    workout_response = {
+        "data": [
+            {"id": "workout1", "fitness_discipline": "yoga"}
+        ]
+    }
+
+    responses.add(
+        responses.GET,
+        "https://api.onepeloton.com/api/user/follower123/workouts",
+        json=workout_response,
+        status=200
+    )
+
+    client = PelotonClient()
+
+    # Call with fitness_discipline parameter
+    workouts = client.get_user_workouts("follower123", limit=10, page=0, fitness_discipline="yoga")
+
+    assert len(workouts) == 1
+    assert workouts[0]["fitness_discipline"] == "yoga"
+
+
+@pytest.mark.unit
+@responses.activate
+def test_get_all_user_workouts_pagination(mock_responses):
+    """Test get_all_user_workouts pagination with multiple pages"""
+    from src.config import API_PAGE_SIZE
+
+    # First page: full page
+    page1_data = [{"id": f"workout{i}"} for i in range(API_PAGE_SIZE)]
+    responses.add(
+        responses.GET,
+        "https://api.onepeloton.com/api/user/follower123/workouts",
+        json={"data": page1_data},
+        status=200
+    )
+
+    # Second page: partial (triggers stop)
+    page2_data = [{"id": f"workout{i}"} for i in range(API_PAGE_SIZE, API_PAGE_SIZE + 15)]
+    responses.add(
+        responses.GET,
+        "https://api.onepeloton.com/api/user/follower123/workouts",
+        json={"data": page2_data},
+        status=200
+    )
+
+    client = PelotonClient()
+
+    workouts = client.get_all_user_workouts("follower123", max_workouts=200)
+
+    # Should return all workouts from both pages
+    assert len(workouts) == API_PAGE_SIZE + 15
+
+
+@pytest.mark.unit
+def test_get_all_user_workouts_empty_first_page():
+    """Test get_all_user_workouts when first page returns no results"""
+    client = PelotonClient()
+
+    with patch.object(client, 'get_user_workouts', return_value=[]):
+        workouts = client.get_all_user_workouts("follower123")
+
+    # Should return empty list immediately
+    assert workouts == []
+
+
+@pytest.mark.unit
+@responses.activate
+def test_get_all_user_workouts_uses_default_max(mock_responses):
+    """Test get_all_user_workouts uses MAX_FOLLOWER_WORKOUTS_FULL by default"""
+    from src.config import MAX_FOLLOWER_WORKOUTS_FULL
+
+    # Return small page to avoid infinite loop
+    page_data = [{"id": f"workout{i}"} for i in range(20)]
+    responses.add(
+        responses.GET,
+        "https://api.onepeloton.com/api/user/follower123/workouts",
+        json={"data": page_data},
+        status=200
+    )
+
+    client = PelotonClient()
+
+    # Call without max_workouts parameter
+    workouts = client.get_all_user_workouts("follower123")
+
+    # Should not raise error and should use default
+    assert len(workouts) == 20
+
+
+@pytest.mark.unit
+@responses.activate
+def test_get_all_user_workouts_trims_to_max(mock_responses):
+    """Test get_all_user_workouts trims results to max_workouts"""
+    from src.config import API_PAGE_SIZE
+
+    # Return multiple full pages
+    for i in range(3):
+        page_data = [{"id": f"workout{i*API_PAGE_SIZE + j}"} for j in range(API_PAGE_SIZE)]
+        responses.add(
+            responses.GET,
+            "https://api.onepeloton.com/api/user/follower123/workouts",
+            json={"data": page_data},
+            status=200
+        )
+
+    client = PelotonClient()
+
+    # Request only 120 workouts
+    workouts = client.get_all_user_workouts("follower123", max_workouts=120)
+
+    # Should return exactly 120 (trimmed from 200+)
+    assert len(workouts) == 120
