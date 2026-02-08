@@ -212,10 +212,10 @@ pytest tests/ -m "not slow" -v     # Skip slow tests
 
 ### Test Coverage
 
-- **Overall Coverage:** 67%
+- **Overall Coverage:** 91%
 - **Core Services:** 95-98% (Data Manager, Race Analyzer, Models)
-- **API Client:** 83%
-- **Total Tests:** 196 (100% passing)
+- **Authentication:** 83-87% (API Client, OAuth)
+- **Total Tests:** 257 (100% passing)
 
 ### Documentation
 
