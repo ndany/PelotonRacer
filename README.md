@@ -191,9 +191,55 @@ workouts = client.get_all_workouts(max_workouts=500, fitness_discipline="cycling
 followers = client.get_followers()
 ```
 
+## Testing
+
+PelotonRacer includes a comprehensive test suite with 196 automated tests covering unit, integration, and security testing.
+
+### Run Tests
+
+```bash
+# Run all tests with coverage report
+pytest tests/ -v --cov=src --cov-report=term-missing
+
+# Run tests without coverage (faster)
+pytest tests/ -v
+
+# Run specific test categories
+pytest tests/ -m unit -v           # Unit tests only
+pytest tests/ -m integration -v    # Integration tests only
+pytest tests/ -m "not slow" -v     # Skip slow tests
+```
+
+### Test Coverage
+
+- **Overall Coverage:** 98%
+- **Core Services:** 96-98% (Data Manager, Race Analyzer, Models)
+- **Authentication:** 100%, 99% (API Client, OAuth)
+- **Total Tests:** 301 (100% passing)
+
+### Documentation
+
+- **Testing Guide:** [docs/testing/TESTING.md](docs/testing/TESTING.md) - Complete guide to writing and running tests
+- **Test Infrastructure:** [tests/README.md](tests/README.md) - Test organization and fixtures
+- **Coverage Reports:** Run `bash scripts/generate_coverage_report.sh` and open `htmlcov/index.html`
+
+## Security
+
+⚠️ **Development Status:** This application is under active development and not yet production-ready.
+
+For security concerns or to report vulnerabilities, please contact the maintainers directly through GitHub issues or private communication channels.
+
+**Note:** Do not deploy to public-facing production environments without proper security review.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+**Before contributing:**
+- Run the test suite: `pytest tests/ -v`
+- Ensure tests pass and coverage doesn't decrease
+- Follow existing code style and patterns
+- Add tests for new features
 
 ## License
 

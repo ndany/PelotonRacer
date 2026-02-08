@@ -1,0 +1,56 @@
+[MAIN]
+# Python code to execute
+init-hook='import sys; sys.path.append(".")'
+
+# Files or directories to be skipped
+ignore=CVS,.git,__pycache__,.venv,venv,env
+
+# Use multiple processes to speed up Pylint
+jobs=4
+
+[MESSAGES CONTROL]
+# Disable specific warnings
+disable=
+    C0111,  # missing-docstring
+    C0103,  # invalid-name
+    R0913,  # too-many-arguments
+    R0914,  # too-many-locals
+    W0511,  # fixme
+    R0801,  # duplicate-code
+
+[FORMAT]
+# Maximum number of characters on a single line
+max-line-length=88
+
+# String used as indentation unit
+indent-string='    '
+
+[BASIC]
+# Good variable names
+good-names=i,j,k,ex,Run,_,id,df
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=7
+
+# Maximum number of attributes for a class
+max-attributes=10
+
+# Minimum number of public methods for a class
+min-public-methods=0
+
+# Maximum number of public methods for a class
+max-public-methods=20
+
+[IMPORTS]
+# Allow wildcard imports from specific modules
+allow-wildcard-with-all=no
+
+[SECURITY]
+# Enable security checks
+enable=
+    eval-used,
+    exec-used,
+    dangerous-default-value,
+    logging-not-lazy,
+    logging-format-interpolation
