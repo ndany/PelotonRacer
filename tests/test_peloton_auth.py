@@ -1746,3 +1746,339 @@ def test_login_generates_fresh_pkce_params():
                 assert auth.config.code_verifier != "old_verifier"
                 assert auth.config.code_challenge != "old_challenge"
                 assert len(auth.config.code_verifier) == 64
+
+
+# =============================================================================
+# ADDITIONAL BRANCH COVERAGE TESTS FOR _submit_credentials (Target: ≥95%)
+# =============================================================================
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_redirect_without_location_header():
+    """
+    Test credential submission when redirect status (302) has no Location header.
+
+    Covers branch: line 245->249 (redirect without location falls through to form parsing)
+    Security concern: Missing Location header on redirect could indicate auth flow issue.
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    # Redirect status (302) but no Location header - this is the missing branch
+    # Should fall through to check for HTTP 200 form response
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=302,
+        headers={}  # No Location header
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    # Should fail with credential submission error (not redirect error)
+    assert "Credential submission failed" in str(exc_info.value)
+    assert "302" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_301_redirect_without_location():
+    """
+    Test credential submission when 301 redirect has no Location header.
+
+    Covers branch: line 245->249 (301 redirect without location)
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=301,
+        headers={}  # No Location header
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    assert "Credential submission failed" in str(exc_info.value)
+    assert "301" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_303_redirect_without_location():
+    """
+    Test credential submission when 303 redirect has no Location header.
+
+    Covers branch: line 245->249 (303 redirect without location)
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=303,
+        headers={}  # No Location header
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    assert "Credential submission failed" in str(exc_info.value)
+    assert "303" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_error_json_empty_error_fields():
+    """
+    Test credential submission with error response containing empty error fields.
+
+    Covers branch: line 256->261 (error_msg is None/empty after checking all fields)
+    Security concern: API returns error status but no error message - could mask issues.
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    # Return error status with JSON but all error fields are None/empty
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=400,
+        json={
+            "description": None,
+            "error_description": None,
+            "error": None,
+            "status": "failed"
+        }
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    # Should fall through to generic error message
+    assert "Credential submission failed" in str(exc_info.value)
+    assert "HTTP 400" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_error_json_empty_strings():
+    """
+    Test credential submission with error response containing empty string error fields.
+
+    Covers branch: line 256->261 (error_msg is empty string, which is falsy)
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    # Return error with empty string error fields
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=401,
+        json={
+            "description": "",
+            "error_description": "",
+            "error": ""
+        }
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    assert "Credential submission failed" in str(exc_info.value)
+    assert "HTTP 401" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_error_json_missing_all_error_keys():
+    """
+    Test credential submission with error JSON missing all expected error keys.
+
+    Covers branch: line 256->261 (no error keys present, .get() returns None)
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    # Return error with JSON but no standard error fields
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=403,
+        json={
+            "status_code": 403,
+            "message": "Forbidden",
+            "timestamp": "2026-02-08T12:00:00Z"
+        }
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    assert "Credential submission failed" in str(exc_info.value)
+    assert "HTTP 403" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_500_error_with_empty_json():
+    """
+    Test credential submission with 500 error and empty JSON object.
+
+    Covers branch: line 256->261 (server error with empty JSON)
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=500,
+        json={}
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    assert "Credential submission failed" in str(exc_info.value)
+    assert "HTTP 500" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_redirect_with_empty_location():
+    """
+    Test credential submission when redirect has empty Location header.
+
+    Covers branch: line 245->249 (location is empty string, falsy)
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=302,
+        headers={"Location": ""}  # Empty Location header
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    assert "Credential submission failed" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_error_with_only_error_field():
+    """
+    Test credential submission extracts 'error' field when it's the only one present.
+
+    Covers the third .get("error") in the error extraction chain.
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=401,
+        json={"error": "invalid_credentials"}
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    assert "Login failed" in str(exc_info.value)
+    assert "invalid_credentials" in str(exc_info.value)
+
+
+@pytest.mark.unit
+@pytest.mark.security
+@responses.activate
+def test_submit_credentials_malformed_json_in_error_response():
+    """
+    Test credential submission handles malformed JSON in error response.
+
+    Covers the ValueError exception path in line 258-259.
+    """
+    auth = PelotonAuth()
+    auth._generate_pkce_params()
+
+    responses.add(
+        responses.POST,
+        f"https://{auth.config.auth_domain}/usernamepassword/login",
+        status=400,
+        body="{invalid json: not closed"
+    )
+
+    with pytest.raises(PelotonAuthError) as exc_info:
+        auth._submit_credentials(
+            "https://auth.onepeloton.com/login",
+            "csrf_token",
+            "user@example.com",
+            "password"
+        )
+
+    # Should catch ValueError and fall through to generic error
+    assert "Credential submission failed" in str(exc_info.value)
+    assert "HTTP 400" in str(exc_info.value)
