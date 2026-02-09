@@ -180,8 +180,8 @@ class PelotonClient:
             response = self.session.get(endpoint)
             response.raise_for_status()
             return response.json()
-        except Exception as e:
-            print(f"Failed to get user profile: {e}")
+        except Exception:
+            print("Failed to get user profile")
             return None
     
     def get_workouts(self, limit: int = 100, page: int = 0, fitness_discipline: str = None) -> List[Dict]:
@@ -214,8 +214,8 @@ class PelotonClient:
             
             data = response.json()
             return data.get("data", [])
-        except Exception as e:
-            print(f"Failed to get workouts: {e}")
+        except Exception:
+            print("Failed to get workouts")
             return []
     
     def get_all_workouts(self, max_workouts: int = None, fitness_discipline: str = "cycling") -> List[Dict]:
@@ -270,8 +270,8 @@ class PelotonClient:
             response.raise_for_status()
             
             return response.json()
-        except Exception as e:
-            print(f"Failed to get workout performance for {workout_id}: {e}")
+        except Exception:
+            print("Failed to get workout performance")
             return None
     
     def get_followers(self) -> List[Dict]:
@@ -293,8 +293,8 @@ class PelotonClient:
             
             data = response.json()
             return data.get("data", [])
-        except Exception as e:
-            print(f"Failed to get followers: {e}")
+        except Exception:
+            print("Failed to get followers")
             return []
     
     def get_user_workouts(self, user_id: str, limit: int = 100, page: int = 0, fitness_discipline: str = None) -> List[Dict]:
@@ -325,8 +325,8 @@ class PelotonClient:
             
             data = response.json()
             return data.get("data", [])
-        except Exception as e:
-            print(f"Failed to get workouts for user {user_id}: {e}")
+        except Exception:
+            print("Failed to get user workouts")
             return []
     
     def get_all_user_workouts(self, user_id: str, max_workouts: int = None, fitness_discipline: str = "cycling") -> List[Dict]:

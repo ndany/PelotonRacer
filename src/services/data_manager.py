@@ -157,8 +157,8 @@ class DataManager:
             with open(self.user_profile_file, 'r') as f:
                 data = json.load(f)
                 return User(**data)
-        except Exception as e:
-            print(f"Error loading user profile: {e}")
+        except Exception:
+            print("Error loading user profile")
             return None
     
     def save_workouts(self, workouts: List[Workout], merge: bool = False) -> None:
@@ -202,8 +202,8 @@ class DataManager:
                 if valid_only:
                     workouts = [w for w in workouts if self.is_valid_ride(w.ride_info)]
                 return workouts
-        except Exception as e:
-            print(f"Error loading workouts: {e}")
+        except Exception:
+            print("Error loading workouts")
             return []
     
     def save_followers(self, followers: List[User]) -> None:
@@ -221,8 +221,8 @@ class DataManager:
             with open(self.followers_file, 'r') as f:
                 data = json.load(f)
                 return [User(**f) for f in data]
-        except Exception as e:
-            print(f"Error loading followers: {e}")
+        except Exception:
+            print("Error loading followers")
             return []
     
     def save_follower_workouts(self, workouts_by_user: Dict[str, List[Workout]], merge: bool = False) -> None:
@@ -276,8 +276,8 @@ class DataManager:
                     if workout_objs:  # Only include users with matching workouts
                         result[user_id] = workout_objs
                 return result
-        except Exception as e:
-            print(f"Error loading follower workouts: {e}")
+        except Exception:
+            print("Error loading follower workouts")
             return {}
     
     def clear_all_data(self) -> None:
