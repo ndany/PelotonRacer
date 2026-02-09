@@ -164,7 +164,15 @@ echo -e "${BOLD}[4/5] Running secrets scan...${NC}"
 SECRETS_AVAILABLE=true
 if command -v detect-secrets &> /dev/null; then
     set +e
-    detect-secrets scan --all-files 2>&1 | tee "${AUDIT_DIR}/secrets-scan.json"
+    detect-secrets scan \
+        --all-files \
+        --exclude-files '^\.venv/' \
+        --exclude-files '^htmlcov/' \
+        --exclude-files '^\.pytest_cache/' \
+        --exclude-files '^docs/security/audits/' \
+        --exclude-files '^data/' \
+        --exclude-files '^\.secrets\.baseline$' \
+        2>&1 | tee "${AUDIT_DIR}/secrets-scan.json"
     set -e
     echo -e "${GREEN}  detect-secrets results saved${NC}"
 else

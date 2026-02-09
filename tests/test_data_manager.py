@@ -620,13 +620,12 @@ def test_error_message_does_not_expose_full_paths(data_manager_with_temp_dir, ca
     # Capture printed output
     captured = capsys.readouterr()
 
-    # VULNERABILITY CHECK: Error messages should NOT expose full file paths
-    # Currently, the code prints "Error loading user profile: {e}"
-    # This might expose the exception which could contain file paths
+    # VULNERABILITY CHECK: Error messages should NOT expose internal details
+    # Messages must be generic without file paths, stack traces, or exception details
     if captured.out:
-        # Verify error message doesn't contain absolute paths
-        # This is a basic check - in production, errors should be logged securely
-        assert "Error loading user profile:" in captured.out or captured.out == ""
+        assert "Error loading user profile" in captured.out
+        # Ensure no sensitive information is leaked after the generic message
+        assert str(manager.user_profile_file) not in captured.out
 
 
 @pytest.mark.unit
@@ -643,7 +642,8 @@ def test_invalid_json_handling_workouts(data_manager_with_temp_dir, capsys):
 
     # Verify error was printed
     captured = capsys.readouterr()
-    assert "Error loading workouts:" in captured.out
+    assert "Error loading workouts" in captured.out
+    assert str(manager.workouts_file) not in captured.out
 
 
 @pytest.mark.unit
@@ -660,7 +660,8 @@ def test_invalid_json_handling_followers(data_manager_with_temp_dir, capsys):
 
     # Verify error was printed
     captured = capsys.readouterr()
-    assert "Error loading followers:" in captured.out
+    assert "Error loading followers" in captured.out
+    assert str(manager.followers_file) not in captured.out
 
 
 @pytest.mark.unit
@@ -677,7 +678,8 @@ def test_invalid_json_handling_follower_workouts(data_manager_with_temp_dir, cap
 
     # Verify error was printed
     captured = capsys.readouterr()
-    assert "Error loading follower workouts:" in captured.out
+    assert "Error loading follower workouts" in captured.out
+    assert str(manager.follower_workouts_file) not in captured.out
 
 
 @pytest.mark.unit
