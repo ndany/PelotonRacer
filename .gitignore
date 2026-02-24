@@ -63,3 +63,7 @@ docs/security/audits/
 # Agent work summaries (temporary metadata)
 docs/**/ISSUE-*-SUMMARY.md
 docs/**/*-SUMMARY.md
+
+# Security patterns (auto-added)
+*.pem
+*.key
